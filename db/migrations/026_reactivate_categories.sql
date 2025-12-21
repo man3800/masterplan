@@ -1,18 +1,26 @@
 begin;
 
--- 구매/생산 대분류 비활성화 (HB-130X는 X축/B축만 사용)
-update category_l
-set is_active = false
-where cat_l_id in (1, 2);
+-- 비활성화된 분류 확인
+select '비활성화된 대분류' as 타입, cat_l_id, name, is_active
+from category_l
+where is_active = false;
 
--- 관련 중분류도 비활성화
+select '비활성화된 중분류' as 타입, cat_m_id, name, cat_l_id, is_active
+from category_m
+where is_active = false;
+
+-- 모든 분류 다시 활성화
+update category_l
+set is_active = true
+where is_active = false;
+
 update category_m
-set is_active = false
-where cat_l_id in (1, 2);
+set is_active = true
+where is_active = false;
 
 commit;
 
--- 확인: 활성화된 분류만 조회
+-- 확인: 활성화된 분류 확인
 select 
   l.cat_l_id as 대분류ID,
   l.name as 대분류,

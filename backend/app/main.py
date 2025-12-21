@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import projects, categories, schedules
+from app.routers import projects, categories, schedules, dashboard
 
 app = FastAPI(title="MasterPlan API", version="0.1.0")
 
@@ -25,3 +25,4 @@ async def force_json_utf8(request: Request, call_next):
 app.include_router(projects.router)
 app.include_router(categories.router)
 app.include_router(schedules.router)
+app.include_router(dashboard.router)

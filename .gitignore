@@ -1,0 +1,30 @@
+# === 환경 변수 & 설정 ===
+.env
+*.env
+.env.*
+!/backend/.env.example
+!/frontend/.env.local.example
+!/scraper/.env.example
+
+# === Python venv ===
+.venv/
+**/.venv/
+venv/
+venv32/
+venv64/
+**/venv*/
+
+# === Node.js ===
+node_modules/
+.next/
+dist/
+
+# === Scraper 산출물 & 상태 ===
+scraper/out/
+scraper/*.log
+scraper/state*.json
+
+# === 일반 캐시/잡파일 ===
+__pycache__/
+*.pyc
+.DS_Store

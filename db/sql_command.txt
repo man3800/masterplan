@@ -1,0 +1,25 @@
+# 접속 종료(강제)
+psql -h 127.0.0.1 -U postgres -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname=masterplan AND pid <> pg_backend_pid();"
+
+# 드랍 & 생성
+psql -h 127.0.0.1 -U postgres -d postgres -c "DROP DATABASE IF EXISTS masterplan;"
+psql -h 127.0.0.1 -U postgres -d postgres -c "CREATE DATABASE masterplan;"
+
+
+psql -h 127.0.0.1 -U postgres -d masterplan -f db/migrations/001_init_schema.sql
+psql -h 127.0.0.1 -U postgres -d masterplan -f db/migrations/002_grants.sql
+psql -h 127.0.0.1 -U postgres -d masterplan -f db/migrations/003_seed.sql
+
+psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='masterplan' AND pid <> pg_backend_pid();"
+psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS masterplan;"
+psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE masterplan WITH ENCODING 'UTF8' TEMPLATE template0;"
+psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE hnkerp WITH LOGIN PASSWORD 'admin1234'";
+
+
+psql -h 127.0.0.1 -U postgres -d masterplan -v ON_ERROR_STOP=1 -c "SET client_encoding TO 'UTF8';" -f db/migrations/000_roles.sql
+psql -h 127.0.0.1 -U postgres -d masterplan -v ON_ERROR_STOP=1 -c "SET client_encoding TO 'UTF8';" -f db/migrations/001_init_schema.sql
+psql -h 127.0.0.1 -U postgres -d masterplan -v ON_ERROR_STOP=1 -c "SET client_encoding TO 'UTF8';" -f db/migrations/002_grants.sql
+psql -h 127.0.0.1 -U postgres -d masterplan -v ON_ERROR_STOP=1 -c "SET client_encoding TO 'UTF8';" -f db/migrations/003_seed.sql
+
+
+

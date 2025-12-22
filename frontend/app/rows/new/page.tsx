@@ -50,13 +50,17 @@ export default function NewRowPage() {
             .catch(console.error);
     }, []);
 
-    // 2) 분류 트리
+    // 2) 분류 트리 (프로젝트별)
     useEffect(() => {
-        fetch(`${API_BASE}/categories/tree`)
+        if (!projectKey) {
+            setCategories([]);
+            return;
+        }
+        fetch(`${API_BASE}/projects/${encodeURIComponent(projectKey)}/classifications/tree`)
             .then((res) => res.json())
             .then(setCategories)
             .catch(console.error);
-    }, []);
+    }, [projectKey]);
 
     // 3) 저장
     async function handleSubmit() {

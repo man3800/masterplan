@@ -1,278 +1,187 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
+
+type ScheduleItem = {
+    item_id: number;
+    erp_project_key: string;
+    cat_s_id: number;
+    cat_s_name: string;
+    owner_dept_id: string;
+    baseline_start: string | null;
+    baseline_end: string | null;
+    current_start: string | null;
+    current_end: string | null;
+    due_end_basis: string | null;
+    plan_shift: number | null;
+    actual_start_date: string | null;
+    actual_end_date: string | null;
+    is_progress_delayed: boolean | null;
+};
 
 type Project = {
     erp_project_key: string;
     project_name: string;
 };
 
-type CategoryS = {
-    id: number;
-    name: string;
-    owner_dept_id: string;
-};
-
-type CategoryM = {
-    id: number;
-    name: string;
-    children: CategoryS[];
-};
-
-type CategoryL = {
-    id: number;
-    name: string;
-    children: CategoryM[];
-};
-
-export default function NewRowPage() {
+export default function ProjectDetailPage() {
     const router = useRouter();
-    const sp = useSearchParams();
+    const params = useParams();
+    const erpProjectKey = params?.erp_project_key as string;
 
-    // ✅ 쿼리에서 프로젝트 키 받기
-    const presetProjectKey = useMemo(() => {
-        const q = sp.get("erp_project_key");
-        return q ? q : "";
-    }, [sp]);
+    const [project, setProject] = useState<Project | null>(null);
+    const [items, setItems] = useState<ScheduleItem[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string>("");
 
-    const [projects, setProjects] = useState<Project[]>([]);
-    const [categories, setCategories] = useState<CategoryL[]>([]);
-
-    const [projectKey, setProjectKey] = useState("");
-    const [catSId, setCatSId] = useState<number | null>(null);
-    const [baselineStart, setBaselineStart] = useState("");
-    const [baselineEnd, setBaselineEnd] = useState("");
-    const [note, setNote] = useState("");
-
-    const [loading, setLoading] = useState(false);
-    const [hint, setHint] = useState<string>("");
-
-    // 1) 프로젝트 목록
+    // 프로젝트 정보 및 스케줄 아이템 로드
     useEffect(() => {
-        fetch(`${API_BASE}/projects`)
-            .then((res) => res.json())
-            .then((data: Project[]) => {
-                setProjects(data);
-
-                // ✅ preset이 있으면 자동 선택
-                if (presetProjectKey) {
-                    const exists = data.some((p) => p.erp_project_key === presetProjectKey);
-                    if (exists) {
-                        setProjectKey(presetProjectKey);
-                        setHint(`프로젝트가 자동 선택되었습니다: ${presetProjectKey}`);
-                    } else {
-                        setHint(`주의: 존재하지 않는 프로젝트 키입니다: ${presetProjectKey}`);
-                    }
-                }
-            })
-            .catch((e) => {
-                console.error(e);
-                setHint("프로젝트 목록을 불러오지 못했습니다.");
-            });
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // 2) 분류 트리
-    useEffect(() => {
-        fetch(`${API_BASE}/categories/tree`)
-            .then((res) => res.json())
-            .then(setCategories)
-            .catch((e) => {
-                console.error(e);
-                setHint("분류 트리를 불러오지 못했습니다.");
-            });
-    }, []);
-
-    // 3) 저장
-    async function handleSubmit() {
-        if (!projectKey || !catSId || !baselineStart || !baselineEnd) {
-            alert("필수 항목을 모두 입력하세요.");
+        if (!erpProjectKey) {
+            setError("프로젝트 키가 없습니다.");
+            setLoading(false);
             return;
         }
 
-        setLoading(true);
-        try {
-            const res = await fetch(
-                `${API_BASE}/projects/${encodeURIComponent(projectKey)}/items`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-User-Id": "dev", // MVP 임시
-                    },
-                    body: JSON.stringify({
-                        cat_s_id: catSId,
-                        baseline_start: baselineStart,
-                        baseline_end: baselineEnd,
-                        plan_note: note || null,
-                    }),
+        async function loadData() {
+            setLoading(true);
+            setError("");
+            try {
+                // 프로젝트 정보
+                const projectsRes = await fetch(`${API_BASE}/projects`);
+                if (!projectsRes.ok) throw new Error("프로젝트 목록을 불러오지 못했습니다.");
+                const projects: Project[] = await projectsRes.json();
+                const foundProject = projects.find((p) => p.erp_project_key === erpProjectKey);
+                
+                if (!foundProject) {
+                    setError(`프로젝트를 찾을 수 없습니다: ${erpProjectKey}`);
+                    setLoading(false);
+                    return;
                 }
-            );
+                setProject(foundProject);
 
-            if (!res.ok) {
-                const t = await res.text();
-                throw new Error(t);
+                // 스케줄 아이템 (API가 없을 수 있으므로 에러는 무시)
+                try {
+                    const itemsRes = await fetch(`${API_BASE}/projects/${encodeURIComponent(erpProjectKey)}/items`);
+                    if (itemsRes.ok) {
+                        const itemsData: ScheduleItem[] = await itemsRes.json();
+                        setItems(itemsData);
+                    } else {
+                        setItems([]);
+                    }
+                } catch (e) {
+                    // items API가 없거나 오류가 발생해도 계속 진행
+                    console.warn("스케줄 아이템을 불러오지 못했습니다:", e);
+                    setItems([]);
+                }
+            } catch (e: any) {
+                console.error(e);
+                setError(e?.message ?? "데이터를 불러오는 중 오류가 발생했습니다.");
+            } finally {
+                setLoading(false);
             }
-
-            router.replace(`/projects/${encodeURIComponent(projectKey)}`);
-            router.refresh();
-        } catch (e) {
-            console.error(e);
-            alert("저장 실패");
-        } finally {
-            setLoading(false);
         }
+
+        loadData();
+    }, [erpProjectKey]);
+
+    function fmtDate(d: string | null) {
+        return d ? new Date(d).toLocaleDateString("ko-KR") : "-";
+    }
+
+    if (loading) {
+        return (
+            <div className="p-6">
+                <div className="mx-auto max-w-6xl">
+                    <div className="text-center py-8 text-slate-500">로딩 중...</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="p-6">
+                <div className="mx-auto max-w-6xl">
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+                        {error}
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return (
         <div className="p-6">
-            <div className="mx-auto max-w-4xl space-y-6">
+            <div className="mx-auto max-w-6xl space-y-6">
                 <div className="flex items-start justify-between gap-3">
                     <div>
-                        <h1 className="text-2xl font-bold">Row 생성</h1>
-                        <p className="mt-1 text-sm text-slate-600">
-                            프로젝트 선택 → 소분류 선택 → Baseline 입력 → 생성
-                        </p>
+                        <h1 className="text-2xl font-bold">{project?.project_name}</h1>
+                        <p className="mt-1 text-sm text-slate-600">{project?.erp_project_key}</p>
                     </div>
-
-                    <button
-                        onClick={() => router.back()}
-                        className="rounded-md border px-4 py-2 text-sm hover:bg-slate-50"
-                    >
-                        ← 뒤로
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => router.push(`/rows/new?erp_project_key=${encodeURIComponent(erpProjectKey)}`)}
+                            className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                        >
+                            + Row 생성
+                        </button>
+                        <button
+                            onClick={() => router.back()}
+                            className="rounded-md border px-4 py-2 text-sm hover:bg-slate-50"
+                        >
+                            ← 뒤로
+                        </button>
+                    </div>
                 </div>
 
-                {hint && (
-                    <div className="rounded-lg border bg-white p-3 text-sm text-slate-700 whitespace-pre-wrap">
-                        {hint}
+                {/* 스케줄 아이템 테이블 */}
+                <div className="rounded-xl border bg-white">
+                    <div className="border-b p-4">
+                        <div className="text-sm font-semibold">스케줄 아이템</div>
                     </div>
-                )}
-
-                {/* 프로젝트 선택 */}
-                <div>
-                    <label className="block text-sm font-medium mb-1">프로젝트</label>
-                    <select
-                        className="w-full rounded border px-3 py-2 bg-white"
-                        value={projectKey}
-                        onChange={(e) => setProjectKey(e.target.value)}
-                    >
-                        <option value="">프로젝트 선택</option>
-                        {projects.map((p) => (
-                            <option key={p.erp_project_key} value={p.erp_project_key}>
-                                {p.project_name}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                {/* 분류 선택 */}
-                <div>
-                    <div className="text-sm font-medium mb-2">작업 분류 (소분류)</div>
-                    <div className="rounded border bg-white p-3 space-y-2 max-h-64 overflow-auto">
-                        {categories.map((l) => (
-                            <div key={`L-${l.id}`}>
-                                <div className="font-semibold">{l.name}</div>
-
-                                {l.children.map((m) => (
-                                    <div key={`L-${l.id}-M-${m.id}`} className="ml-4">
-                                        <div className="text-sm text-slate-600">{m.name}</div>
-
-                                        <div className="ml-4 space-y-1">
-                                            {m.children.map((s) => {
-                                                // ✅ 화면상의 고유 key/id는 "경로+소분류id"로 만든다 (중복 방지)
-                                                const uiKey = `L${l.id}-M${m.id}-S${s.id}`;
-                                                const inputId = `cat_s_${uiKey}`;
-
-                                                return (
-                                                    <div key={uiKey} className="flex items-center gap-2">
-                                                        <input
-                                                            id={inputId}
-                                                            type="radio"
-                                                            name="cat_s"                // ✅ 그룹은 하나로 유지
-                                                            value={s.id}
-                                                            checked={catSId === s.id}   // ✅ 실제 선택 값은 소분류 id
-                                                            onChange={() => setCatSId(s.id)}
-                                                        />
-                                                        <label htmlFor={inputId} className="text-sm cursor-pointer">
-                                                            {s.name}
-                                                            <span className="ml-2 text-xs text-slate-500">
-                                                                ({s.owner_dept_id})
-                                                            </span>
-                                                            <span className="ml-2 text-xs text-slate-400">
-                                                                - {l.name} / {m.name}
-                                                            </span>
-                                                        </label>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                ))}
+                    <div className="overflow-x-auto p-4">
+                        {items.length === 0 ? (
+                            <div className="text-center py-8 text-slate-500">
+                                스케줄 아이템이 없습니다. Row를 생성해주세요.
                             </div>
-                        ))}
+                        ) : (
+                            <table className="min-w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-slate-600 border-b">
+                                        <th className="py-2 pr-4">소분류</th>
+                                        <th className="py-2 pr-4">담당부서</th>
+                                        <th className="py-2 pr-4">Baseline 시작</th>
+                                        <th className="py-2 pr-4">Baseline 종료</th>
+                                        <th className="py-2 pr-4">실제 시작</th>
+                                        <th className="py-2 pr-4">실제 종료</th>
+                                        <th className="py-2 pr-4">상태</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {items.map((item) => (
+                                        <tr key={item.item_id} className="border-t">
+                                            <td className="py-2 pr-4">{item.cat_s_name}</td>
+                                            <td className="py-2 pr-4">{item.owner_dept_id || "-"}</td>
+                                            <td className="py-2 pr-4">{fmtDate(item.baseline_start)}</td>
+                                            <td className="py-2 pr-4">{fmtDate(item.baseline_end)}</td>
+                                            <td className="py-2 pr-4">{fmtDate(item.actual_start_date)}</td>
+                                            <td className="py-2 pr-4">{fmtDate(item.actual_end_date)}</td>
+                                            <td className="py-2 pr-4">
+                                                {item.is_progress_delayed ? (
+                                                    <span className="text-red-600">지연</span>
+                                                ) : (
+                                                    <span className="text-green-600">정상</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
                     </div>
-                </div>
-
-                {/* baseline */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">
-                            Baseline 시작일
-                        </label>
-                        <input
-                            type="date"
-                            className="w-full rounded border px-3 py-2 bg-white"
-                            value={baselineStart}
-                            onChange={(e) => setBaselineStart(e.target.value)}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">
-                            Baseline 종료일
-                        </label>
-                        <input
-                            type="date"
-                            className="w-full rounded border px-3 py-2 bg-white"
-                            value={baselineEnd}
-                            onChange={(e) => setBaselineEnd(e.target.value)}
-                        />
-                    </div>
-                </div>
-
-                {/* 메모 */}
-                <div>
-                    <label className="block text-sm font-medium mb-1">메모 (선택)</label>
-                    <textarea
-                        className="w-full rounded border px-3 py-2 bg-white"
-                        rows={3}
-                        value={note}
-                        onChange={(e) => setNote(e.target.value)}
-                    />
-                </div>
-
-                {/* 저장 */}
-                <div className="flex justify-end gap-2">
-                    <button
-                        disabled={loading}
-                        onClick={() =>
-                            router.push(`/projects/${encodeURIComponent(projectKey || presetProjectKey || "")}`)
-                        }
-                        className="rounded-md border px-5 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
-                    >
-                        프로젝트로
-                    </button>
-
-                    <button
-                        disabled={loading}
-                        onClick={handleSubmit}
-                        className="rounded-md bg-blue-600 px-6 py-2 text-sm text-white disabled:opacity-50"
-                    >
-                        {loading ? "저장 중..." : "Row 생성"}
-                    </button>
                 </div>
             </div>
         </div>

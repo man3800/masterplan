@@ -2,29 +2,110 @@
 .env
 *.env
 .env.*
-!/backend/.env.example
-!/frontend/.env.local.example
-!/scraper/.env.example
+!.env.example
+!.env.local.example
+!**/.env.example
+!**/.env.local.example
 
-# === Python venv ===
+# === Python ===
+# Virtual Environment
 .venv/
 **/.venv/
 venv/
 venv32/
 venv64/
 **/venv*/
+env/
+ENV/
 
-# === Node.js ===
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Python Distribution / Packaging
+*.egg-info/
+dist/
+build/
+*.egg
+
+# === Node.js / Next.js ===
 node_modules/
 .next/
+out/
 dist/
+.nuxt/
+.cache/
 
-# === Scraper 산출물 & 상태 ===
-scraper/out/
-scraper/*.log
-scraper/state*.json
+# Next.js Build Output
+.next/
+out/
 
-# === 일반 캐시/잡파일 ===
-__pycache__/
-*.pyc
+# === TypeScript ===
+*.tsbuildinfo
+
+# === IDE / Editor ===
+# VSCode
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# === OS ===
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# === 로그 파일 ===
+*.log
+logs/
+*.log.*
+
+# === 데이터베이스 ===
+# PostgreSQL
+*.sql.backup
+*.sql.bak
+*.dump
+*.dmp
+
+# === 임시 파일 ===
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.cache/
+
+# === 인프라 ===
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Docker
+.dockerignore
+
+# === 기타 ===
+# 테스트 커버리지
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# 프로젝트별
+body.json

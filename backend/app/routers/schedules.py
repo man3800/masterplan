@@ -12,7 +12,7 @@ router = APIRouter(prefix="/projects", tags=["schedules"])
 
 
 class CreateItemBody(BaseModel):
-    cat_s_id: int = Field(..., ge=1)
+    classification_id: int = Field(..., ge=1)  # cat_s_id -> classification_id
     baseline_start: date
     baseline_end: date
     plan_note: Optional[str] = None
@@ -23,103 +23,124 @@ class UpdateActualBody(BaseModel):
     memo: Optional[str] = None    
 
 
-@router.get("/{erp_project_key}/items")
-async def list_project_items(erp_project_key: str, db: AsyncSession = Depends(get_db)):
+@router.get("/{project_code}/items")
+async def list_project_items(project_code: str, db: AsyncSession = Depends(get_db)):
+    """프로젝트의 작업 목록 조회 (새 스키마: projects, classifications, tasks)"""
+    # 프로젝트 코드 변환 (erp_project_key 형식 지원: "HB-130X(#1035)" -> "HB-130X-1035")
+    code = project_code.replace("(#", "-").replace(")", "")
+    
+    # 프로젝트 존재 확인
+    project_check = text("SELECT id FROM projects WHERE code = :code")
+    project_result = await db.execute(project_check, {"code": code})
+    project_id = project_result.scalar_one_or_none()
+    
+    if not project_id:
+        raise HTTPException(status_code=404, detail=f"Project '{project_code}' not found")
+    
+    # tasks 테이블에서 작업 조회
+    # 현재 tasks 테이블에는 baseline_start, baseline_end, actual_start_date, actual_end_date 필드가 없음
+    # TODO: tasks 테이블에 날짜 필드 추가 또는 별도 테이블 필요
     q = text("""
-        select
-          item_id,
-          erp_project_key,
-          cat_s_id,
-          cat_s_name,
-          owner_dept_id,
-          baseline_start, baseline_end,
-          current_start, current_end,
-          due_end_basis,
-          plan_shift,
-          actual_start_date, actual_end_date,
-          is_progress_delayed
-        from v_schedule_item_status
-        where erp_project_key = :k
-        order by baseline_start nulls last, item_id;
+        SELECT
+          t.id as item_id,
+          p.code as erp_project_key,
+          c.id as cat_s_id,
+          c.name as cat_s_name,
+          NULL::text as owner_dept_id,  -- classifications 테이블에 owner_dept_id가 없으므로 NULL
+          NULL::date as baseline_start,  -- tasks 테이블에 baseline 정보가 없으므로 NULL
+          NULL::date as baseline_end,    -- tasks 테이블에 baseline 정보가 없으므로 NULL
+          NULL::date as current_start,   -- tasks 테이블에 current plan 정보가 없으므로 NULL
+          NULL::date as current_end,     -- tasks 테이블에 current plan 정보가 없으므로 NULL
+          NULL::date as due_end_basis,  -- tasks 테이블에 due date 정보가 없으므로 NULL
+          NULL::text as plan_shift,     -- tasks 테이블에 plan shift 정보가 없으므로 NULL
+          NULL::date as actual_start_date, -- tasks 테이블에 actual start date 정보가 없으므로 NULL
+          NULL::date as actual_end_date,   -- tasks 테이블에 actual end date 정보가 없으므로 NULL
+          FALSE as is_progress_delayed   -- tasks 테이블에 지연 정보가 없으므로 FALSE
+        FROM tasks t
+        JOIN projects p ON p.id = t.project_id
+        JOIN classifications c ON c.id = t.classification_id
+        WHERE p.id = :project_id
+        ORDER BY t.created_at;
     """)
-    rows = (await db.execute(q, {"k": erp_project_key})).mappings().all()
+    rows = (await db.execute(q, {"project_id": project_id})).mappings().all()
     return list(rows)
 
 
-@router.post("/{erp_project_key}/items")
+@router.post("/{project_code}/items")
 async def create_item_with_baseline(
-    erp_project_key: str,
+    project_code: str,  # erp_project_key -> project_code
     body: CreateItemBody,
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
+    """작업 생성 (새 스키마: projects, classifications, tasks)"""
+    # 프로젝트 코드 변환
+    code = project_code.replace("(#", "-").replace(")", "")
+
     # 0) 프로젝트 존재 확인
-    exists = await db.execute(
-        text("select 1 from erp_projects_cache where erp_project_key = :k"),
-        {"k": erp_project_key},
-    )
-    if exists.first() is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project_check = text("SELECT id FROM projects WHERE code = :code")
+    project_result = await db.execute(project_check, {"code": code})
+    project_id = project_result.scalar_one_or_none()
+    
+    if not project_id:
+        raise HTTPException(status_code=404, detail=f"Project '{project_code}' not found")
 
-    # 1) cat_s 존재 확인 + 기본 owner_dept 가져오기
-    srow = (await db.execute(
-        text("""
-            select cat_s_id, owner_dept_id
-            from category_s
-            where cat_s_id = :sid and is_active = true
-        """),
-        {"sid": body.cat_s_id},
-    )).mappings().first()
-
-    if not srow:
-        raise HTTPException(status_code=404, detail="cat_s_id not found or inactive")
-
-    # 2) schedule_item upsert (프로젝트+소분류 유니크)
-    #    - owner_dept_id는 category_s 기본값을 복제 저장(권한 판단 편의)
-    upsert_item = text("""
-        insert into schedule_item (
-          erp_project_key, cat_s_id, owner_dept_id, status, created_at, created_by
-        ) values (
-          :k, :sid, :owner_dept, 'not_started', now(), :user_id
-        )
-        on conflict (erp_project_key, cat_s_id) do update
-        set owner_dept_id = excluded.owner_dept_id,
-            updated_at = now(),
-            updated_by = excluded.created_by
-        returning item_id;
+    # 1) classification_id 존재 확인
+    classification_check = text("""
+        SELECT id FROM classifications 
+        WHERE id = :classification_id 
+          AND project_id = :project_id 
+          AND is_active = TRUE
     """)
+    classification_result = await db.execute(classification_check, {
+        "classification_id": body.classification_id,
+        "project_id": project_id
+    })
+    classification_exists = classification_result.scalar_one_or_none()
 
-    # 3) baseline plan upsert
-    upsert_baseline = text("""
-        insert into schedule_plan (
-        item_id, plan_kind, start_date, end_date, plan_note, created_at, created_by
-        ) values (
-        :item_id, 'baseline', :start_date, :end_date, :note, now(), :user_id
+    if not classification_exists:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Classification ID {body.classification_id} not found or inactive for project '{project_code}'"
         )
-        on conflict (item_id, plan_kind) do update
-        set start_date = excluded.start_date,
-            end_date   = excluded.end_date,
-            plan_note  = excluded.plan_note,
-            updated_at = now(),
-            updated_by = excluded.created_by
-        returning plan_id;
-    """)
 
-    # 트랜잭션 (중첩 begin() 방지: commit/rollback 수동 처리)
+    # 2) tasks 테이블에 새 작업 생성
+    # TODO: tasks 테이블에 baseline_start, baseline_end 필드 추가 필요
+    # 현재는 title과 description만 저장
+    insert_task = text("""
+        INSERT INTO tasks (
+            project_id,
+            classification_id,
+            title,
+            description,
+            status,
+            created_at,
+            updated_at
+        ) VALUES (
+            :project_id,
+            :classification_id,
+            :title,
+            :description,
+            'open',  -- 기본 상태
+            now(),
+            now()
+        ) RETURNING id;
+    """)
+    
+    # title은 classification name으로 임시 설정
+    classification_name_q = text("SELECT name FROM classifications WHERE id = :classification_id")
+    classification_name_result = await db.execute(classification_name_q, {"classification_id": body.classification_id})
+    classification_name = classification_name_result.scalar_one_or_none()
+
+    if not classification_name:
+        raise HTTPException(status_code=500, detail="Could not retrieve classification name for new task")
+
     try:
-        item_id = (await db.execute(upsert_item, {
-            "k": erp_project_key,
-            "sid": body.cat_s_id,
-            "owner_dept": srow["owner_dept_id"],
-            "user_id": user_id,
-        })).scalar_one()
-
-        plan_id = (await db.execute(upsert_baseline, {
-            "item_id": item_id,
-            "start_date": body.baseline_start,
-            "end_date": body.baseline_end,
-            "note": body.plan_note,
-            "user_id": user_id,
+        new_task_id = (await db.execute(insert_task, {
+            "project_id": project_id,
+            "classification_id": body.classification_id,
+            "title": classification_name,  # 임시로 분류 이름을 title로 사용
+            "description": body.plan_note,
         })).scalar_one()
 
         await db.commit()
@@ -129,10 +150,10 @@ async def create_item_with_baseline(
         raise
 
     return {
-        "item_id": item_id,
-        "baseline_plan_id": plan_id,
-        "erp_project_key": erp_project_key,
-        "cat_s_id": body.cat_s_id,
+        "item_id": new_task_id,
+        "erp_project_key": code,
+        "classification_id": body.classification_id,
+        "message": "Task created successfully. Note: baseline_start and baseline_end are not yet stored in tasks table."
     }
 
 @router.put("/items/{item_id}/actual")
@@ -142,70 +163,54 @@ async def upsert_actual(
     user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
+    """작업 실제 일정 업데이트 (새 스키마: tasks)"""
     # 간단 검증: 종료일이 있으면 시작일보다 빠를 수 없음
     if body.actual_end is not None and body.actual_end < body.actual_start:
         raise HTTPException(status_code=400, detail="actual_end must be >= actual_start")
 
-    # item 존재 확인
-    row = (await db.execute(
-        text("select item_id from schedule_item where item_id = :id and deleted_at is null"),
-        {"id": item_id},
-    )).first()
-    if row is None:
-        raise HTTPException(status_code=404, detail="item not found")
-
-    upsert = text("""
-        insert into schedule_actual (
-        item_id, actual_start_date, actual_end_date, memo, created_at, created_by
-        ) values (
-        :item_id, :start_date, :end_date, :memo, now(), :user_id
-        )
-        on conflict (item_id) do update
-        set actual_start_date = excluded.actual_start_date,
-            actual_end_date   = excluded.actual_end_date,
-            memo              = excluded.memo,
-            updated_at        = now(),
-            updated_by        = excluded.created_by
-        returning actual_id;
-    """)
+    # task 존재 확인
+    task_check = text("SELECT id, status FROM tasks WHERE id = :item_id")
+    task_result = await db.execute(task_check, {"item_id": item_id})
+    task = task_result.first()
     
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # TODO: tasks 테이블에 actual_start_date, actual_end_date 필드 추가 필요
+    # 현재는 description에 메모만 저장하고 상태만 업데이트
+    # 상태 자동 결정
+    if body.actual_end is not None:
+        new_status = "closed"  # tasks 테이블의 status는 'open', 'closed' 등
+    elif body.actual_start is not None:
+        new_status = "in_progress"
+    else:
+        new_status = task[1]  # 기존 상태 유지
 
     try:
-        actual_id = (await db.execute(upsert, {
+        # tasks 테이블 업데이트 (description에 메모 저장, status 업데이트)
+        update_task = text("""
+            UPDATE tasks
+            SET description = COALESCE(:memo, description),
+                status = :status,
+                updated_at = now()
+            WHERE id = :item_id
+            RETURNING id;
+        """)
+        
+        result = await db.execute(update_task, {
             "item_id": item_id,
-            "start_date": body.actual_start,
-            "end_date": body.actual_end,
             "memo": body.memo,
-            "user_id": user_id,
-        })).scalar_one()
-
-        # 상태 자동 결정
-        if body.actual_end is not None:
-            new_status = "done"
-        elif body.actual_start is not None:
-            new_status = "in_progress"
-        else:
-            new_status = None
-
-        if new_status:
-            await db.execute(
-                text("""
-                    update schedule_item
-                    set status = :status,
-                        updated_at = now(),
-                        updated_by = :user_id
-                    where item_id = :item_id
-                """),
-                {
-                    "status": new_status,
-                    "user_id": user_id,
-                    "item_id": item_id,
-                },
-            )
-
+            "status": new_status,
+        })
+        
+        updated_task_id = result.scalar_one()
         await db.commit()
+
     except Exception:
         await db.rollback()
         raise
 
-    return {"item_id": item_id, "actual_id": actual_id}
+    return {
+        "item_id": updated_task_id,
+        "message": "Task actual dates updated. Note: actual_start_date and actual_end_date are not yet stored in tasks table."
+    }

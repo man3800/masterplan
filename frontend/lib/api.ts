@@ -10,12 +10,18 @@ export async function apiGet<T>(path: string): Promise<T> {
     return res.json();
 }
 
-export async function apiPost<T>(path: string, body: any): Promise<T> {
+export async function apiPost<T>(path: string, body: any, method: string = "POST"): Promise<T> {
     const res = await fetch(`${BASE}${path}`, {
-        method: "POST",
+        method: method,
         headers: { "Content-Type": "application/json", "X-User-Id": "dev" },
-        body: JSON.stringify(body),
+        body: method !== "DELETE" ? JSON.stringify(body) : undefined,
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || `HTTP ${res.status}`);
+    }
+    if (res.status === 204) {
+        return null as T; // No content
+    }
     return res.json();
 }

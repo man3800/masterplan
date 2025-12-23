@@ -73,20 +73,20 @@ async def get_dashboard_projects(
         # 상태 매핑
         status_text = str(proj["status"])
         if status_text == 'pending':
-            status_id = 1
-            status_name = '대기'
+            proj_status_id = 1
+            proj_status_name = '대기'
         elif status_text == 'in_progress':
-            status_id = 2
-            status_name = '진행중'
+            proj_status_id = 2
+            proj_status_name = '진행중'
         elif status_text == 'paused':
-            status_id = 3
-            status_name = '중단'
+            proj_status_id = 3
+            proj_status_name = '중단'
         elif status_text == 'done':
-            status_id = 4
-            status_name = '완료'
+            proj_status_id = 4
+            proj_status_name = '완료'
         else:
-            status_id = 99
-            status_name = status_text
+            proj_status_id = 99
+            proj_status_name = status_text
         
         # 진행률 계산
         if total_count == 0:
@@ -94,8 +94,8 @@ async def get_dashboard_projects(
         else:
             progress_pct = min(100, max(0, int((closed_count / total_count) * 100)))
         
-        # status_id 필터링
-        if status_id is not None and status_id != status_id:
+        # status_id 필터링 (파라미터와 로컬 변수명 구분)
+        if status_id is not None and proj_status_id != status_id:
             continue
         
         result.append({
@@ -103,8 +103,8 @@ async def get_dashboard_projects(
             "project_name": proj["name"],
             "machine_type_code": None,
             "machine_type_name": None,
-            "status_id": status_id,
-            "status_name": status_name,
+            "status_id": proj_status_id,
+            "status_name": proj_status_name,
             "baseline_due_date": proj["due_at"].isoformat() if proj["due_at"] else None,
             "current_due_date": proj["due_at"].isoformat() if proj["due_at"] else None,
             "progress_pct": progress_pct

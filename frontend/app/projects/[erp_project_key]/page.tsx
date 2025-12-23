@@ -8,15 +8,15 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 type ScheduleItem = {
     item_id: number;
     erp_project_key: string;
-    cat_s_id: number;
+    cat_s_id: number;  // 백엔드에서 classification_id를 cat_s_id로 반환 (호환성 유지)
     cat_s_name: string;
-    owner_dept_id: string;
+    owner_dept_id: string | null;  // null 허용
     baseline_start: string | null;
     baseline_end: string | null;
     current_start: string | null;
     current_end: string | null;
     due_end_basis: string | null;
-    plan_shift: number | null;
+    plan_shift: string | null;  // number -> string (백엔드에서 text로 반환)
     actual_start_date: string | null;
     actual_end_date: string | null;
     is_progress_delayed: boolean | null;
@@ -164,7 +164,7 @@ export default function ProjectDetailPage() {
                                     {items.map((item) => (
                                         <tr key={item.item_id} className="border-t">
                                             <td className="py-2 pr-4">{item.cat_s_name}</td>
-                                            <td className="py-2 pr-4">{item.owner_dept_id || "-"}</td>
+                                            <td className="py-2 pr-4">{item.owner_dept_id ?? "-"}</td>
                                             <td className="py-2 pr-4">{fmtDate(item.baseline_start)}</td>
                                             <td className="py-2 pr-4">{fmtDate(item.baseline_end)}</td>
                                             <td className="py-2 pr-4">{fmtDate(item.actual_start_date)}</td>

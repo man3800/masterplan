@@ -1,13 +1,61 @@
 -- 001_init_schema.sql
 BEGIN;
 
--- 프로젝트(있다면)
+-- 프로젝트 상태 ENUM 타입
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_status') THEN
+    CREATE TYPE project_status AS ENUM ('pending','in_progress','paused','done');
+  END IF;
+END $$;
+
+-- 프로젝트
 CREATE TABLE IF NOT EXISTS projects (
-  id          BIGSERIAL PRIMARY KEY,
-  code        TEXT UNIQUE,
-  name        TEXT NOT NULL,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  id              BIGSERIAL PRIMARY KEY,
+  code            TEXT UNIQUE,
+  name            TEXT NOT NULL,
+  
+  -- 수주처 (MVP: 컬럼 / 추후 customer 테이블로 분리 가능)
+  customer_code   TEXT,
+  customer_name   TEXT,
+  
+  -- 프로젝트 상태
+  status          project_status NOT NULL DEFAULT 'pending',
+  
+  -- 주요 날짜
+  ordered_at      DATE,   -- 수주일
+  paused_at       DATE,   -- 중단일
+  completed_at    DATE,   -- 완료일
+  due_at          DATE,   -- 납기일
+  
+  -- 시스템 메타
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- 프로젝트 제약조건
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'ck_projects_status_dates' 
+    AND conrelid = 'projects'::regclass
+  ) THEN
+    ALTER TABLE projects
+    ADD CONSTRAINT ck_projects_status_dates CHECK (
+      (status <> 'paused' OR paused_at IS NOT NULL)
+      AND
+      (status <> 'done' OR completed_at IS NOT NULL)
+      AND
+      (completed_at IS NULL OR status = 'done')
+    );
+  END IF;
+END $$;
+
+-- 프로젝트 인덱스
+CREATE INDEX IF NOT EXISTS ix_projects_status ON projects(status);
+CREATE INDEX IF NOT EXISTS ix_projects_due_at ON projects(due_at);
+CREATE INDEX IF NOT EXISTS ix_projects_customer ON projects(customer_code);
 
 -- 분류(재귀)
 CREATE TABLE IF NOT EXISTS classifications (
@@ -45,82 +93,6 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 
 CREATE INDEX IF NOT EXISTS ix_tasks_project_class ON tasks(project_id, classification_id);
-
--- 업데이트 v1.0.0
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_status') THEN
-    CREATE TYPE project_status AS ENUM ('pending','in_progress','paused','done');
-  END IF;
-END $$;
-
-CREATE TABLE IF NOT EXISTS projects (
-  id              BIGSERIAL PRIMARY KEY,
-
-  -- 내부/표시 식별자
-  code            TEXT UNIQUE,
-  name            TEXT NOT NULL,
-
-  -- 수주처 (MVP: 컬럼 / 추후 customer 테이블로 분리 가능)
-  customer_code   TEXT,
-  customer_name   TEXT,
-
-  -- 프로젝트 상태
-  status          project_status NOT NULL DEFAULT 'pending',
-
-  -- 주요 날짜
-  ordered_at      DATE,   -- 수주일
-  paused_at       DATE,   -- 중단일
-  completed_at    DATE,   -- 완료일
-  due_at          DATE,   -- 납기일
-
-  -- 시스템 메타
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS projects (
-  id              BIGSERIAL PRIMARY KEY,
-
-  -- 내부/표시 식별자
-  code            TEXT UNIQUE,
-  name            TEXT NOT NULL,
-
-  -- 수주처 (MVP: 컬럼 / 추후 customer 테이블로 분리 가능)
-  customer_code   TEXT,
-  customer_name   TEXT,
-
-  -- 프로젝트 상태
-  status          project_status NOT NULL DEFAULT 'pending',
-
-  -- 주요 날짜
-  ordered_at      DATE,   -- 수주일
-  paused_at       DATE,   -- 중단일
-  completed_at    DATE,   -- 완료일
-  due_at          DATE,   -- 납기일
-
-  -- 시스템 메타
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-ALTER TABLE projects
-ADD CONSTRAINT ck_projects_status_dates CHECK (
-  (status <> 'paused' OR paused_at IS NOT NULL)
-  AND
-  (status <> 'done' OR completed_at IS NOT NULL)
-  AND
-  (completed_at IS NULL OR status = 'done')
-);
-
-CREATE INDEX IF NOT EXISTS ix_projects_status
-  ON projects(status);
-
-CREATE INDEX IF NOT EXISTS ix_projects_due_at
-  ON projects(due_at);
-
-CREATE INDEX IF NOT EXISTS ix_projects_customer
-  ON projects(customer_code);
 
 
 COMMIT;

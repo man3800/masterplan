@@ -23,6 +23,7 @@ export default function RootLayout({
 
             <nav className="p-3 space-y-1 text-sm">
               <NavItem href="/" label="대시보드" />
+              <NavItem href="/tasks" label="작업 목록" />
               <NavItem href="/master" label="전체 마스터스케줄" />
               <NavItem href="/projects" label="프로젝트 스케줄" />
               <NavItem href="/rows/new" label="Row 생성" />

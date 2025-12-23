@@ -13,7 +13,7 @@ type Project = {
 type CategoryS = {
     id: number;
     name: string;
-    owner_dept_id: string;
+    owner_dept_id?: string;  // 백엔드에서 빈 문자열 또는 없을 수 있음
 };
 
 type CategoryM = {
@@ -80,7 +80,7 @@ export default function NewRowPage() {
                         "X-User-Id": "dev", // MVP용 임시
                     },
                     body: JSON.stringify({
-                        cat_s_id: catSId,
+                        classification_id: catSId,  // cat_s_id → classification_id
                         baseline_start: baselineStart,
                         baseline_end: baselineEnd,
                         plan_note: note || null,

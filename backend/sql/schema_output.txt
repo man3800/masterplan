@@ -1,0 +1,267 @@
+========================================
+1. TABLES LIST
+========================================
+   table_name    | table_type 
+-----------------+------------
+ classifications | BASE TABLE
+ projects        | BASE TABLE
+ tasks           | BASE TABLE
+(3 rows)
+
+
+========================================
+2. COLUMNS (by table)
+========================================
+   table_name    |    column_name    | ordinal_position |        data_type         | character_maximum_length | is_nullable |               column_default                |               type_detail                
+-----------------+-------------------+------------------+--------------------------+--------------------------+-------------+---------------------------------------------+------------------------------------------
+ classifications | id                |                1 | bigint                   |                          | NO          | nextval('classifications_id_seq'::regclass) | int8
+ classifications | project_id        |                2 | bigint                   |                          | NO          |                                             | int8
+ classifications | parent_id         |                3 | bigint                   |                          | YES         |                                             | int8
+ classifications | name              |                4 | text                     |                          | NO          |                                             | text
+ classifications | depth             |                5 | integer                  |                          | NO          | 0                                           | int4
+ classifications | path              |                6 | text                     |                          | NO          |                                             | text
+ classifications | sort_no           |                7 | integer                  |                          | NO          | 0                                           | int4
+ classifications | is_active         |                8 | boolean                  |                          | NO          | true                                        | bool
+ classifications | created_at        |                9 | timestamp with time zone |                          | NO          | now()                                       | timestamptz
+ classifications | updated_at        |               10 | timestamp with time zone |                          | NO          | now()                                       | timestamptz
+ classifications | owner_dept_id     |               11 | bigint                   |                          | YES         |                                             | int8
+ projects        | id                |                1 | bigint                   |                          | NO          | nextval('projects_id_seq'::regclass)        | int8
+ projects        | code              |                2 | text                     |                          | YES         |                                             | text
+ projects        | name              |                3 | text                     |                          | NO          |                                             | text
+ projects        | created_at        |                4 | timestamp with time zone |                          | NO          | now()                                       | timestamptz
+ projects        | customer_code     |                5 | text                     |                          | YES         |                                             | text
+ projects        | customer_name     |                6 | text                     |                          | YES         |                                             | text
+ projects        | status            |                7 | USER-DEFINED             |                          | NO          | 'pending'::project_status                   | ENUM: pending, in_progress, paused, done
+ projects        | ordered_at        |                8 | date                     |                          | YES         |                                             | date
+ projects        | paused_at         |                9 | date                     |                          | YES         |                                             | date
+ projects        | completed_at      |               10 | date                     |                          | YES         |                                             | date
+ projects        | due_at            |               11 | date                     |                          | YES         |                                             | date
+ projects        | updated_at        |               12 | timestamp with time zone |                          | NO          | now()                                       | timestamptz
+ tasks           | id                |                1 | bigint                   |                          | NO          | nextval('tasks_id_seq'::regclass)           | int8
+ tasks           | project_id        |                2 | bigint                   |                          | NO          |                                             | int8
+ tasks           | classification_id |                3 | bigint                   |                          | NO          |                                             | int8
+ tasks           | title             |                4 | text                     |                          | NO          |                                             | text
+ tasks           | description       |                5 | text                     |                          | YES         |                                             | text
+ tasks           | status            |                6 | text                     |                          | NO          | 'open'::text                                | text
+ tasks           | created_at        |                7 | timestamp with time zone |                          | NO          | now()                                       | timestamptz
+ tasks           | updated_at        |                8 | timestamp with time zone |                          | NO          | now()                                       | timestamptz
+ tasks           | baseline_start    |                9 | timestamp with time zone |                          | YES         |                                             | timestamptz
+ tasks           | baseline_end      |               10 | timestamp with time zone |                          | YES         |                                             | timestamptz
+ tasks           | actual_start_date |               11 | date                     |                          | YES         |                                             | date
+ tasks           | actual_end_date   |               12 | date                     |                          | YES         |                                             | date
+(35 rows)
+
+
+========================================
+3. PRIMARY KEYS
+========================================
+   table_name    | column_name |   constraint_name    
+-----------------+-------------+----------------------
+ classifications | id          | classifications_pkey
+ projects        | id          | projects_pkey
+ tasks           | id          | tasks_pkey
+(3 rows)
+
+
+========================================
+4. FOREIGN KEYS
+========================================
+   from_table    |    from_column    |    to_table     | to_column |         constraint_name         | update_rule | delete_rule 
+-----------------+-------------------+-----------------+-----------+---------------------------------+-------------+-------------
+ classifications | project_id        | projects        | id        | classifications_project_id_fkey | NO ACTION   | CASCADE
+ classifications | parent_id         | classifications | id        | classifications_parent_id_fkey  | NO ACTION   | CASCADE
+ tasks           | project_id        | projects        | id        | tasks_project_id_fkey           | NO ACTION   | CASCADE
+ tasks           | classification_id | classifications | id        | tasks_classification_id_fkey    | NO ACTION   | RESTRICT
+ tasks           | classification_id | classifications | id        | fk_tasks_classification         | NO ACTION   | RESTRICT
+(5 rows)
+
+
+========================================
+5. UNIQUE CONSTRAINTS
+========================================
+   table_name    | column_name |  constraint_name  
+-----------------+-------------+-------------------
+ classifications | project_id  | uq_class_sibling
+ classifications | project_id  | uq_class_path
+ classifications | parent_id   | uq_class_sibling
+ classifications | path        | uq_class_path
+ classifications | name        | uq_class_sibling
+ projects        | code        | projects_code_key
+(6 rows)
+
+
+========================================
+6. CHECK CONSTRAINTS
+========================================
+   table_name    |     constraint_name      |                                                                                                 check_clause                                                                                                 
+-----------------+--------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ classifications | 2200_374521_10_not_null  | updated_at IS NOT NULL
+ classifications | 2200_374521_1_not_null   | id IS NOT NULL
+ classifications | 2200_374521_2_not_null   | project_id IS NOT NULL
+ classifications | 2200_374521_4_not_null   | name IS NOT NULL
+ classifications | 2200_374521_5_not_null   | depth IS NOT NULL
+ classifications | 2200_374521_6_not_null   | path IS NOT NULL
+ classifications | 2200_374521_7_not_null   | sort_no IS NOT NULL
+ classifications | 2200_374521_8_not_null   | is_active IS NOT NULL
+ classifications | 2200_374521_9_not_null   | created_at IS NOT NULL
+ projects        | 2200_374509_12_not_null  | updated_at IS NOT NULL
+ projects        | 2200_374509_1_not_null   | id IS NOT NULL
+ projects        | 2200_374509_3_not_null   | name IS NOT NULL
+ projects        | 2200_374509_4_not_null   | created_at IS NOT NULL
+ projects        | 2200_374509_7_not_null   | status IS NOT NULL
+ projects        | ck_projects_status_dates | (((status <> 'paused'::project_status) OR (paused_at IS NOT NULL)) AND ((status <> 'done'::project_status) OR (completed_at IS NOT NULL)) AND ((completed_at IS NULL) OR (status = 'done'::project_status)))
+ tasks           | 2200_374551_1_not_null   | id IS NOT NULL
+ tasks           | 2200_374551_2_not_null   | project_id IS NOT NULL
+ tasks           | 2200_374551_3_not_null   | classification_id IS NOT NULL
+ tasks           | 2200_374551_4_not_null   | title IS NOT NULL
+ tasks           | 2200_374551_6_not_null   | status IS NOT NULL
+ tasks           | 2200_374551_7_not_null   | created_at IS NOT NULL
+ tasks           | 2200_374551_8_not_null   | updated_at IS NOT NULL
+(22 rows)
+
+
+========================================
+7. INDEXES
+========================================
+    tablename    |            indexname            |                                                                                   indexdef                                                                                   
+-----------------+---------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ classifications | classifications_pkey            | CREATE UNIQUE INDEX classifications_pkey ON public.classifications USING btree (id)
+ classifications | ix_class_project_parent         | CREATE INDEX ix_class_project_parent ON public.classifications USING btree (project_id, parent_id)
+ classifications | ix_class_project_parent_sort    | CREATE INDEX ix_class_project_parent_sort ON public.classifications USING btree (project_id, parent_id, sort_no, name)
+ classifications | ix_class_project_path           | CREATE INDEX ix_class_project_path ON public.classifications USING btree (project_id, path)
+ classifications | ix_class_project_path_prefix    | CREATE INDEX ix_class_project_path_prefix ON public.classifications USING btree (project_id, path text_pattern_ops)
+ classifications | uq_class_path                   | CREATE UNIQUE INDEX uq_class_path ON public.classifications USING btree (project_id, path)
+ classifications | uq_class_sibling                | CREATE UNIQUE INDEX uq_class_sibling ON public.classifications USING btree (project_id, parent_id, name)
+ projects        | ix_projects_customer            | CREATE INDEX ix_projects_customer ON public.projects USING btree (customer_code)
+ projects        | ix_projects_due_at              | CREATE INDEX ix_projects_due_at ON public.projects USING btree (due_at)
+ projects        | ix_projects_status              | CREATE INDEX ix_projects_status ON public.projects USING btree (status)
+ projects        | projects_code_key               | CREATE UNIQUE INDEX projects_code_key ON public.projects USING btree (code)
+ projects        | projects_pkey                   | CREATE UNIQUE INDEX projects_pkey ON public.projects USING btree (id)
+ tasks           | ix_tasks_actual_dates           | CREATE INDEX ix_tasks_actual_dates ON public.tasks USING btree (actual_start_date, actual_end_date) WHERE ((actual_start_date IS NOT NULL) OR (actual_end_date IS NOT NULL))
+ tasks           | ix_tasks_baseline_dates         | CREATE INDEX ix_tasks_baseline_dates ON public.tasks USING btree (baseline_start, baseline_end) WHERE ((baseline_start IS NOT NULL) OR (baseline_end IS NOT NULL))
+ tasks           | ix_tasks_classification_id      | CREATE INDEX ix_tasks_classification_id ON public.tasks USING btree (classification_id)
+ tasks           | ix_tasks_project_class          | CREATE INDEX ix_tasks_project_class ON public.tasks USING btree (project_id, classification_id)
+ tasks           | ix_tasks_project_classification | CREATE INDEX ix_tasks_project_classification ON public.tasks USING btree (project_id, classification_id)
+ tasks           | tasks_pkey                      | CREATE UNIQUE INDEX tasks_pkey ON public.tasks USING btree (id)
+(18 rows)
+
+
+========================================
+8. ENUM TYPES
+========================================
+   enum_name    | enum_value  | enumsortorder 
+----------------+-------------+---------------
+ project_status | pending     |             1
+ project_status | in_progress |             2
+ project_status | paused      |             3
+ project_status | done        |             4
+(4 rows)
+
+
+========================================
+9. VIEWS
+========================================
+            table_name            |                                                     view_definition                                                     
+----------------------------------+-------------------------------------------------------------------------------------------------------------------------
+ v_classifications_children_count |  SELECT c.project_id,                                                                                                  +
+                                  |     c.id,                                                                                                              +
+                                  |     count(ch.id) AS child_count                                                                                        +
+                                  |    FROM (classifications c                                                                                             +
+                                  |      LEFT JOIN classifications ch ON (((ch.project_id = c.project_id) AND (ch.parent_id = c.id))))                     +
+                                  |   GROUP BY c.project_id, c.id;
+ v_classifications_root_children  |  SELECT c.id,                                                                                                          +
+                                  |     c.project_id,                                                                                                      +
+                                  |     c.parent_id,                                                                                                       +
+                                  |     c.name,                                                                                                            +
+                                  |     c.depth,                                                                                                           +
+                                  |     c.path,                                                                                                            +
+                                  |     c.sort_no,                                                                                                         +
+                                  |     c.is_active,                                                                                                       +
+                                  |     c.created_at,                                                                                                      +
+                                  |     c.updated_at,                                                                                                      +
+                                  |     c.owner_dept_id                                                                                                    +
+                                  |    FROM (classifications c                                                                                             +
+                                  |      JOIN classifications r ON (((r.project_id = c.project_id) AND (r.parent_id IS NULL) AND (r.name = 'ROOT'::text))))+
+                                  |   WHERE (c.parent_id = r.id);
+ v_classifications_tree           |  WITH RECURSIVE t AS (                                                                                                 +
+                                  |          SELECT c.project_id,                                                                                          +
+                                  |             c.id,                                                                                                      +
+                                  |             c.parent_id,                                                                                               +
+                                  |             c.name,                                                                                                    +
+                                  |             c.depth,                                                                                                   +
+                                  |             c.path,                                                                                                    +
+                                  |             c.sort_no,                                                                                                 +
+                                  |             c.is_active,                                                                                               +
+                                  |             c.id AS root_id,                                                                                           +
+                                  |             0 AS level                                                                                                 +
+                                  |            FROM classifications c                                                                                      +
+                                  |           WHERE (c.parent_id IS NULL)                                                                                  +
+                                  |         UNION ALL                                                                                                      +
+                                  |          SELECT c.project_id,                                                                                          +
+                                  |             c.id,                                                                                                      +
+                                  |             c.parent_id,                                                                                               +
+                                  |             c.name,                                                                                                    +
+                                  |             c.depth,                                                                                                   +
+                                  |             c.path,                                                                                                    +
+                                  |             c.sort_no,                                                                                                 +
+                                  |             c.is_active,                                                                                               +
+                                  |             t_1.root_id,                                                                                               +
+                                  |             (t_1.level + 1) AS level                                                                                   +
+                                  |            FROM (classifications c                                                                                     +
+                                  |              JOIN t t_1 ON (((t_1.project_id = c.project_id) AND (t_1.id = c.parent_id))))                             +
+                                  |         )                                                                                                              +
+                                  |  SELECT project_id,                                                                                                    +
+                                  |     id,                                                                                                                +
+                                  |     parent_id,                                                                                                         +
+                                  |     name,                                                                                                              +
+                                  |     depth,                                                                                                             +
+                                  |     path,                                                                                                              +
+                                  |     sort_no,                                                                                                           +
+                                  |     is_active,                                                                                                         +
+                                  |     root_id,                                                                                                           +
+                                  |     level                                                                                                              +
+                                  |    FROM t;
+ v_classifications_under_root     |  WITH RECURSIVE t AS (                                                                                                 +
+                                  |          SELECT c.project_id,                                                                                          +
+                                  |             c.id,                                                                                                      +
+                                  |             c.parent_id,                                                                                               +
+                                  |             c.name,                                                                                                    +
+                                  |             c.depth,                                                                                                   +
+                                  |             c.path,                                                                                                    +
+                                  |             c.sort_no,                                                                                                 +
+                                  |             c.is_active,                                                                                               +
+                                  |             c.id AS root_id,                                                                                           +
+                                  |             0 AS level                                                                                                 +
+                                  |            FROM classifications c                                                                                      +
+                                  |           WHERE ((c.parent_id IS NULL) AND (c.name = 'ROOT'::text))                                                    +
+                                  |         UNION ALL                                                                                                      +
+                                  |          SELECT c.project_id,                                                                                          +
+                                  |             c.id,                                                                                                      +
+                                  |             c.parent_id,                                                                                               +
+                                  |             c.name,                                                                                                    +
+                                  |             c.depth,                                                                                                   +
+                                  |             c.path,                                                                                                    +
+                                  |             c.sort_no,                                                                                                 +
+                                  |             c.is_active,                                                                                               +
+                                  |             t_1.root_id,                                                                                               +
+                                  |             (t_1.level + 1)                                                                                            +
+                                  |            FROM (classifications c                                                                                     +
+                                  |              JOIN t t_1 ON (((t_1.project_id = c.project_id) AND (t_1.id = c.parent_id))))                             +
+                                  |         )                                                                                                              +
+                                  |  SELECT project_id,                                                                                                    +
+                                  |     id,                                                                                                                +
+                                  |     parent_id,                                                                                                         +
+                                  |     name,                                                                                                              +
+                                  |     depth,                                                                                                             +
+                                  |     path,                                                                                                              +
+                                  |     sort_no,                                                                                                           +
+                                  |     is_active,                                                                                                         +
+                                  |     root_id,                                                                                                           +
+                                  |     level                                                                                                              +
+                                  |    FROM t;
+(4 rows)
+
+
+========================================
+SCHEMA INTROSPECTION COMPLETE
+========================================

@@ -59,11 +59,12 @@ async def list_tasks(
         sort_dir = sort_parts[1] if sort_parts[1] in ["asc", "desc"] else "desc"
         sort = f"{sort_parts[0]} {sort_dir}"
 
-    # Build query
+    # Build query (with project_name JOIN)
     query = text(f"""
         SELECT 
             t.id,
             t.project_id,
+            p.name AS project_name,
             t.classification_id,
             t.title,
             t.description,
@@ -75,6 +76,7 @@ async def list_tasks(
             t.created_at,
             t.updated_at
         FROM tasks t
+        INNER JOIN projects p ON p.id = t.project_id
         WHERE {where_clause}
         ORDER BY t.{sort}
         LIMIT :limit OFFSET :offset
@@ -97,11 +99,13 @@ async def get_task(
     """
     query = text("""
         SELECT 
-            id, project_id, classification_id, title, description, status,
-            baseline_start, baseline_end, actual_start_date, actual_end_date,
-            created_at, updated_at
-        FROM tasks
-        WHERE id = :task_id
+            t.id, t.project_id, p.name AS project_name, t.classification_id, 
+            t.title, t.description, t.status,
+            t.baseline_start, t.baseline_end, t.actual_start_date, t.actual_end_date,
+            t.created_at, t.updated_at
+        FROM tasks t
+        INNER JOIN projects p ON p.id = t.project_id
+        WHERE t.id = :task_id
     """)
     result = await db.execute(query, {"task_id": task_id})
     row = result.mappings().first()
@@ -243,13 +247,21 @@ async def update_task(
     update_fields.append("updated_at = now()")
 
     update_query = text(f"""
-        UPDATE tasks
-        SET {', '.join(update_fields)}
-        WHERE id = :task_id
-        RETURNING 
-            id, project_id, classification_id, title, description, status,
-            baseline_start, baseline_end, actual_start_date, actual_end_date,
-            created_at, updated_at
+        WITH updated AS (
+            UPDATE tasks
+            SET {', '.join(update_fields)}
+            WHERE id = :task_id
+            RETURNING id, project_id, classification_id, title, description, status,
+                baseline_start, baseline_end, actual_start_date, actual_end_date,
+                created_at, updated_at
+        )
+        SELECT 
+            u.id, u.project_id, p.name AS project_name, u.classification_id,
+            u.title, u.description, u.status,
+            u.baseline_start, u.baseline_end, u.actual_start_date, u.actual_end_date,
+            u.created_at, u.updated_at
+        FROM updated u
+        INNER JOIN projects p ON p.id = u.project_id
     """)
 
     result = await db.execute(update_query, params)
@@ -291,13 +303,21 @@ async def complete_task(
     Mark task as complete (sets status to 'closed')
     """
     update_query = text("""
-        UPDATE tasks
-        SET status = 'closed', updated_at = now()
-        WHERE id = :task_id
-        RETURNING 
-            id, project_id, classification_id, title, description, status,
-            baseline_start, baseline_end, actual_start_date, actual_end_date,
-            created_at, updated_at
+        WITH updated AS (
+            UPDATE tasks
+            SET status = 'closed', updated_at = now()
+            WHERE id = :task_id
+            RETURNING id, project_id, classification_id, title, description, status,
+                baseline_start, baseline_end, actual_start_date, actual_end_date,
+                created_at, updated_at
+        )
+        SELECT 
+            u.id, u.project_id, p.name AS project_name, u.classification_id,
+            u.title, u.description, u.status,
+            u.baseline_start, u.baseline_end, u.actual_start_date, u.actual_end_date,
+            u.created_at, u.updated_at
+        FROM updated u
+        INNER JOIN projects p ON p.id = u.project_id
     """)
     result = await db.execute(update_query, {"task_id": task_id})
     await db.commit()
@@ -318,13 +338,21 @@ async def reopen_task(
     Reopen a task (sets status to 'open')
     """
     update_query = text("""
-        UPDATE tasks
-        SET status = 'open', updated_at = now()
-        WHERE id = :task_id
-        RETURNING 
-            id, project_id, classification_id, title, description, status,
-            baseline_start, baseline_end, actual_start_date, actual_end_date,
-            created_at, updated_at
+        WITH updated AS (
+            UPDATE tasks
+            SET status = 'open', updated_at = now()
+            WHERE id = :task_id
+            RETURNING id, project_id, classification_id, title, description, status,
+                baseline_start, baseline_end, actual_start_date, actual_end_date,
+                created_at, updated_at
+        )
+        SELECT 
+            u.id, u.project_id, p.name AS project_name, u.classification_id,
+            u.title, u.description, u.status,
+            u.baseline_start, u.baseline_end, u.actual_start_date, u.actual_end_date,
+            u.created_at, u.updated_at
+        FROM updated u
+        INNER JOIN projects p ON p.id = u.project_id
     """)
     result = await db.execute(update_query, {"task_id": task_id})
     await db.commit()

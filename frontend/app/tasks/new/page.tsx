@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api";
 import type { TaskCreate } from "@/types/task";
 import type { ClassificationTreeNode } from "@/types/classification";
+import ProjectSelect from "@/components/ProjectSelect";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
@@ -25,20 +26,7 @@ export default function NewTaskPage() {
   const [actualEndDate, setActualEndDate] = useState("");
 
   // Data
-  const [projects, setProjects] = useState<Array<{ id: number; code: string; name: string }>>([]);
   const [classifications, setClassifications] = useState<ClassificationTreeNode[]>([]);
-
-  // Load projects
-  useEffect(() => {
-    apiGet<Array<{ erp_project_key: string; project_name: string }>>("/projects")
-      .then((data) => {
-        // Note: API returns erp_project_key, but we need project_id
-        // For now, we'll need to fetch project details or use a different endpoint
-        // This is a limitation - we may need to add a /projects endpoint that returns id
-        console.warn("Projects API doesn't return id. Need to update API or use code mapping.");
-      })
-      .catch(console.error);
-  }, []);
 
   // Load classifications when project is selected
   useEffect(() => {
@@ -46,8 +34,9 @@ export default function NewTaskPage() {
       setClassifications([]);
       return;
     }
-    // Note: We need project_id but API uses project_code
-    // This needs to be resolved - either update API or add project_id endpoint
+    // Note: Classification tree API uses project_code, not project_id
+    // For now, we'll need to fetch project by id to get code, or update API
+    // This is a limitation that should be addressed
     console.warn("Classification tree API uses project_code, not project_id");
   }, [projectId]);
 
@@ -103,21 +92,16 @@ export default function NewTaskPage() {
         )}
 
         <form onSubmit={handleSubmit} className="rounded-xl border bg-white p-6 space-y-6">
-          {/* Project ID */}
+          {/* Project Select */}
           <div>
             <label className="block text-sm font-medium mb-1">
-              프로젝트 ID <span className="text-red-500">*</span>
+              프로젝트 <span className="text-red-500">*</span>
             </label>
-            <input
-              type="number"
-              required
-              className="w-full rounded border px-3 py-2"
-              value={projectId || ""}
-              onChange={(e) => setProjectId(e.target.value ? parseInt(e.target.value) : null)}
+            <ProjectSelect
+              value={projectId}
+              onChange={setProjectId}
+              required={true}
             />
-            <p className="mt-1 text-xs text-slate-500">
-              프로젝트 ID를 입력하세요 (현재 API 제한으로 직접 입력 필요)
-            </p>
           </div>
 
           {/* Classification ID */}

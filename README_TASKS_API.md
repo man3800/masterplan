@@ -114,20 +114,53 @@ npm install
 npm run dev
 ```
 
+## Projects API
+
+### 엔드포인트
+
+- `GET /projects` - 목록 조회 (검색, 필터, 페이징, 정렬)
+- `GET /projects/{id}` - 상세 조회
+- `POST /projects` - 생성
+- `PATCH /projects/{id}` - 수정
+- `DELETE /projects/{id}` - 삭제
+
+### 제약조건 검증
+
+Projects API는 DB 제약조건을 Pydantic 모델에서 검증합니다:
+
+- `status = 'paused'` → `paused_at` 필수
+- `status = 'done'` → `completed_at` 필수
+- `completed_at` 존재 → `status`는 반드시 `'done'`
+
+검증 실패 시 400 에러를 반환합니다.
+
 ## 주의사항
 
-1. **프로젝트 ID 매핑**: 현재 `/tasks/new` 페이지에서 프로젝트 ID를 직접 입력해야 합니다. `/projects` API가 `id`를 반환하지 않아서 발생하는 제한입니다. 향후 개선 필요.
+1. **프로젝트 선택 UI**: `/tasks/new` 페이지에서 `ProjectSelect` 컴포넌트를 사용하여 프로젝트를 선택합니다. 프로젝트 ID 직접 입력은 더 이상 필요하지 않습니다.
 
-2. **분류 트리**: Classification 트리는 `project_id`로 조회하지만, 기존 API는 `project_code`를 사용합니다. 통일 필요.
+2. **분류 트리**: Classification 트리는 `project_id`로 조회하지만, 기존 API는 `project_code`를 사용합니다. 향후 통일 필요.
 
 3. **Soft Delete**: `tasks` 테이블에는 `deleted_at` 컬럼이 없으므로 hard delete를 사용합니다. 필요시 마이그레이션으로 추가 가능.
 
 4. **Baseline 날짜**: `baseline_start`와 `baseline_end`는 `timestamptz` 타입입니다. 프론트엔드에서 `datetime-local` 입력을 사용합니다.
 
+5. **Tasks 응답**: Tasks API 응답에는 `project_name`이 포함됩니다 (projects 테이블과 JOIN).
+
+## ProjectSelect 컴포넌트
+
+프론트엔드에서 프로젝트 선택을 위한 재사용 가능한 컴포넌트입니다.
+
+- **파일**: `frontend/components/ProjectSelect.tsx`
+- **기능**: 
+  - `GET /projects?limit=200&sort=updated_at desc` 호출
+  - 표시 텍스트: `name (code)` 형식 (code가 있는 경우)
+  - 수주처(customer_name) 보조 표시
+  - 선택 시 `project_id` 반환
+
 ## 다음 단계
 
-1. 프로젝트 목록 API에 `id` 필드 추가
-2. 분류 트리 API를 `project_id` 기반으로 통일
-3. 테스트 코드 작성
-4. 에러 처리 개선
+1. 분류 트리 API를 `project_id` 기반으로 통일
+2. 테스트 코드 작성
+3. 에러 처리 개선
+4. 프로젝트별 통계/일정/대시보드 확장
 

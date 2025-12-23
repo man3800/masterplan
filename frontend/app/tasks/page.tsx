@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiGet } from "@/lib/api";
 import type { Task, TaskListParams } from "@/types/task";
+import ProjectSelect from "@/components/ProjectSelect";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
@@ -43,14 +44,20 @@ function formatDateTime(dateStr: string | null): string {
 
 export default function TasksPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
+  // Project filter from URL
+  const [projectIdFilter, setProjectIdFilter] = useState<number | null>(() => {
+    const projectId = searchParams.get("project_id");
+    return projectId ? parseInt(projectId) : null;
+  });
+
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
-  const [projectIdFilter, setProjectIdFilter] = useState<number | null>(null);
   const [classificationIdFilter, setClassificationIdFilter] = useState<number | null>(null);
 
   // Pagination
@@ -62,6 +69,12 @@ export default function TasksPage() {
   const [sort, setSort] = useState("updated_at desc");
 
   async function loadTasks() {
+    if (!projectIdFilter) {
+      setTasks([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
@@ -99,6 +112,17 @@ export default function TasksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [limit, offset, sort, searchQuery, statusFilter, projectIdFilter, classificationIdFilter]);
 
+  // Update URL when project filter changes
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (projectIdFilter) {
+      params.set("project_id", String(projectIdFilter));
+    } else {
+      params.delete("project_id");
+    }
+    router.replace(`/tasks?${params.toString()}`, { scroll: false });
+  }, [projectIdFilter, router, searchParams]);
+
   const handleSearch = () => {
     setOffset(0);
     loadTasks();
@@ -126,65 +150,76 @@ export default function TasksPage() {
           </div>
         )}
 
-        {/* Filters */}
-        <div className="rounded-xl border bg-white p-4 space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">검색</label>
-              <input
-                type="text"
-                placeholder="제목/설명 검색..."
-                className="w-full rounded border px-3 py-1.5 text-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">상태</label>
-              <select
-                className="w-full rounded border px-3 py-1.5 text-sm bg-white"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="">전체</option>
-                <option value="open">대기</option>
-                <option value="in_progress">진행중</option>
-                <option value="closed">완료</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">프로젝트 ID</label>
-              <input
-                type="number"
-                placeholder="프로젝트 ID"
-                className="w-full rounded border px-3 py-1.5 text-sm"
-                value={projectIdFilter || ""}
-                onChange={(e) => setProjectIdFilter(e.target.value ? parseInt(e.target.value) : null)}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">분류 ID</label>
-              <input
-                type="number"
-                placeholder="분류 ID"
-                className="w-full rounded border px-3 py-1.5 text-sm"
-                value={classificationIdFilter || ""}
-                onChange={(e) =>
-                  setClassificationIdFilter(e.target.value ? parseInt(e.target.value) : null)
-                }
-              />
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <button
-              onClick={handleSearch}
-              className="rounded-md bg-slate-600 px-4 py-1.5 text-sm text-white hover:bg-slate-700"
-            >
-              검색
-            </button>
-          </div>
+        {/* Project Select */}
+        <div className="rounded-xl border bg-white p-4">
+          <label className="block text-sm font-medium mb-2">프로젝트 선택</label>
+          <ProjectSelect
+            value={projectIdFilter}
+            onChange={(id) => {
+              setProjectIdFilter(id);
+              setOffset(0); // Reset pagination
+            }}
+            required={false}
+          />
         </div>
+
+        {!projectIdFilter && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">
+            프로젝트를 선택하세요. 프로젝트를 선택하면 해당 프로젝트의 작업 목록이 표시됩니다.
+          </div>
+        )}
+
+        {/* Filters */}
+        {projectIdFilter && (
+          <div className="rounded-xl border bg-white p-4 space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">검색</label>
+                <input
+                  type="text"
+                  placeholder="제목/설명 검색..."
+                  className="w-full rounded border px-3 py-1.5 text-sm"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">상태</label>
+                <select
+                  className="w-full rounded border px-3 py-1.5 text-sm bg-white"
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                >
+                  <option value="">전체</option>
+                  <option value="open">대기</option>
+                  <option value="in_progress">진행중</option>
+                  <option value="closed">완료</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">분류 ID</label>
+                <input
+                  type="number"
+                  placeholder="분류 ID"
+                  className="w-full rounded border px-3 py-1.5 text-sm"
+                  value={classificationIdFilter || ""}
+                  onChange={(e) =>
+                    setClassificationIdFilter(e.target.value ? parseInt(e.target.value) : null)
+                  }
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={handleSearch}
+                className="rounded-md bg-slate-600 px-4 py-1.5 text-sm text-white hover:bg-slate-700"
+              >
+                검색
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Tasks Table */}
         <div className="rounded-xl border bg-white">

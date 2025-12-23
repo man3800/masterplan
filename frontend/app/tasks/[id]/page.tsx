@@ -210,8 +210,13 @@ export default function TaskDetailPage() {
               <div>{getStatusBadge(task.status)}</div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">프로젝트 ID</label>
-              <div className="text-sm">{task.project_id}</div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">프로젝트</label>
+              <div className="text-sm">
+                {task.project_name || `ID: ${task.project_id}`}
+              </div>
+              {task.project_name && (
+                <div className="text-xs text-slate-500 mt-0.5">ID: {task.project_id}</div>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">분류 ID</label>

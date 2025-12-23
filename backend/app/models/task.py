@@ -72,6 +72,7 @@ class TaskOut(BaseModel):
     """Task output model"""
     id: int
     project_id: int
+    project_name: Optional[str] = None  # JOIN from projects.name
     classification_id: int
     title: str
     description: Optional[str] = None

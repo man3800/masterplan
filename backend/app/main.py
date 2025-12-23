@@ -28,12 +28,12 @@ async def health():
     return {"status": "ok"}
 
 # 기존 라우터 (프로젝트별 API)
-# app.include_router(projects.router)  # 기존 스키마 사용 중 - 비활성화
-app.include_router(projects_new.router)  # 새로운 프로젝트 API
+app.include_router(projects_new.router)  # 프로젝트 코드 기반 API (프론트엔드 호환)
 app.include_router(categories.router)
 app.include_router(schedules.router)
 app.include_router(dashboard.router)
 
 # 새로운 CRUD 라우터 (스키마 기반)
+app.include_router(projects.router)  # Projects CRUD API (id 기반)
 app.include_router(tasks.router)
 app.include_router(classifications.router)

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { apiGet } from "@/lib/api";
+import type { Project } from "@/types/project";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
@@ -20,11 +22,6 @@ type ScheduleItem = {
     actual_start_date: string | null;
     actual_end_date: string | null;
     is_progress_delayed: boolean | null;
-};
-
-type Project = {
-    erp_project_key: string;
-    project_name: string;
 };
 
 export default function ProjectDetailPage() {
@@ -49,11 +46,9 @@ export default function ProjectDetailPage() {
             setLoading(true);
             setError("");
             try {
-                // 프로젝트 정보
-                const projectsRes = await fetch(`${API_BASE}/projects`);
-                if (!projectsRes.ok) throw new Error("프로젝트 목록을 불러오지 못했습니다.");
-                const projects: Project[] = await projectsRes.json();
-                const foundProject = projects.find((p) => p.erp_project_key === erpProjectKey);
+                // 프로젝트 정보 (실제 API 형식 사용)
+                const projects = await apiGet<Project[]>(`/projects?limit=200`);
+                const foundProject = projects.find((p) => p.code === erpProjectKey);
                 
                 if (!foundProject) {
                     setError(`프로젝트를 찾을 수 없습니다: ${erpProjectKey}`);
@@ -118,12 +113,19 @@ export default function ProjectDetailPage() {
             <div className="mx-auto max-w-6xl space-y-6">
                 <div className="flex items-start justify-between gap-3">
                     <div>
-                        <h1 className="text-2xl font-bold">{project?.project_name}</h1>
-                        <p className="mt-1 text-sm text-slate-600">{project?.erp_project_key}</p>
+                        <h1 className="text-2xl font-bold">{project?.name}</h1>
+                        <p className="mt-1 text-sm text-slate-600">{project?.code || project?.id}</p>
                     </div>
                     <div className="flex gap-2">
                         <button
-                            onClick={() => router.push(`/rows/new?erp_project_key=${encodeURIComponent(erpProjectKey)}`)}
+                            onClick={() => {
+                                // project_id를 우선 사용, 없으면 erp_project_key로 전달
+                                if (project?.id) {
+                                    router.push(`/rows/new?project_id=${project.id}`);
+                                } else {
+                                    router.push(`/rows/new?erp_project_key=${encodeURIComponent(erpProjectKey)}`);
+                                }
+                            }}
                             className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
                         >
                             + Row 생성

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { apiGet, apiPost } from "@/lib/api";
-import type { TaskCreate } from "@/types/task";
+import type { TaskCreate, Task } from "@/types/task";
 import type { ClassificationTreeNode } from "@/types/classification";
 import ProjectSelect from "@/components/ProjectSelect";
 
@@ -11,11 +11,15 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
 
 export default function NewTaskPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
-  // Form state
-  const [projectId, setProjectId] = useState<number | null>(null);
+  // Form state - URL에서 project_id 읽어서 초기값 설정
+  const [projectId, setProjectId] = useState<number | null>(() => {
+    const projectIdParam = searchParams.get("project_id");
+    return projectIdParam ? parseInt(projectIdParam) : null;
+  });
   const [classificationId, setClassificationId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -27,18 +31,51 @@ export default function NewTaskPage() {
 
   // Data
   const [classifications, setClassifications] = useState<ClassificationTreeNode[]>([]);
+  const [loadingClassifications, setLoadingClassifications] = useState(false);
 
   // Load classifications when project is selected
   useEffect(() => {
     if (!projectId) {
       setClassifications([]);
+      setClassificationId(null);
       return;
     }
-    // Note: Classification tree API uses project_code, not project_id
-    // For now, we'll need to fetch project by id to get code, or update API
-    // This is a limitation that should be addressed
-    console.warn("Classification tree API uses project_code, not project_id");
+
+    async function loadClassifications() {
+      setLoadingClassifications(true);
+      try {
+        const tree = await apiGet<ClassificationTreeNode[]>(
+          `/classifications/tree?project_id=${projectId}`
+        );
+        setClassifications(tree);
+      } catch (e: any) {
+        setError(`분류 목록 로딩 실패: ${e?.message ?? String(e)}`);
+        setClassifications([]);
+      } finally {
+        setLoadingClassifications(false);
+      }
+    }
+
+    loadClassifications();
   }, [projectId]);
+
+  // Flatten tree for display (recursive)
+  function flattenTree(nodes: ClassificationTreeNode[], depth: number = 0): Array<ClassificationTreeNode & { displayName: string }> {
+    const result: Array<ClassificationTreeNode & { displayName: string }> = [];
+    for (const node of nodes) {
+      const indent = "  ".repeat(depth);
+      result.push({
+        ...node,
+        displayName: `${indent}${node.name}`,
+      });
+      if (node.children && node.children.length > 0) {
+        result.push(...flattenTree(node.children, depth + 1));
+      }
+    }
+    return result;
+  }
+
+  const flatClassifications = classifications.length > 0 ? flattenTree(classifications) : [];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +100,7 @@ export default function NewTaskPage() {
         actual_end_date: actualEndDate || null,
       };
 
-      const created = await apiPost<TaskCreate>("/tasks", taskData);
+      const created = await apiPost<Task>("/tasks", taskData);
       router.push(`/tasks/${created.id}`);
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -104,23 +141,45 @@ export default function NewTaskPage() {
             />
           </div>
 
-          {/* Classification ID */}
+          {/* Classification Select */}
           <div>
             <label className="block text-sm font-medium mb-1">
-              분류 ID <span className="text-red-500">*</span>
+              작업 분류(소분류) <span className="text-red-500">*</span>
             </label>
-            <input
-              type="number"
-              required
-              className="w-full rounded border px-3 py-2"
-              value={classificationId || ""}
-              onChange={(e) =>
-                setClassificationId(e.target.value ? parseInt(e.target.value) : null)
-              }
-            />
-            <p className="mt-1 text-xs text-slate-500">
-              분류 ID를 입력하세요 (현재 API 제한으로 직접 입력 필요)
-            </p>
+            {!projectId ? (
+              <div className="w-full rounded border px-3 py-2 bg-slate-50 text-slate-500">
+                프로젝트를 먼저 선택하세요
+              </div>
+            ) : loadingClassifications ? (
+              <div className="w-full rounded border px-3 py-2 bg-slate-50 text-slate-500">
+                분류 목록 로딩 중...
+              </div>
+            ) : flatClassifications.length === 0 ? (
+              <div className="w-full rounded border px-3 py-2 bg-slate-50 text-slate-500">
+                분류가 없습니다
+              </div>
+            ) : (
+              <select
+                required
+                className="w-full rounded border px-3 py-2 bg-white"
+                value={classificationId || ""}
+                onChange={(e) =>
+                  setClassificationId(e.target.value ? parseInt(e.target.value) : null)
+                }
+              >
+                <option value="">분류를 선택하세요</option>
+                {flatClassifications.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.displayName} (ID: {item.id})
+                  </option>
+                ))}
+              </select>
+            )}
+            {projectId && flatClassifications.length > 0 && (
+              <p className="mt-1 text-xs text-slate-500">
+                {flatClassifications.length}개의 분류 항목 중 선택하세요
+              </p>
+            )}
           </div>
 
           {/* Title */}

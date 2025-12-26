@@ -137,7 +137,12 @@ export default function TasksPage() {
             <p className="text-sm text-slate-600">작업 관리 및 조회</p>
           </div>
           <button
-            onClick={() => router.push("/tasks/new")}
+            onClick={() => {
+              const url = projectIdFilter 
+                ? `/tasks/new?project_id=${projectIdFilter}`
+                : "/tasks/new";
+              router.push(url);
+            }}
             className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
           >
             + 새 작업

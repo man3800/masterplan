@@ -45,7 +45,60 @@ export default function Page() {
                     statusId ? `/dashboard/projects?status_id=${statusId}` : "/dashboard/projects"
                 ),
             ]);
-            setStatusCounts(sc);
+            
+            // 기본값 맵 생성 (0으로 초기화)
+            const defaultStatusMap: Record<string, StatusCount> = {
+                pending: {
+                    status_id: 1,
+                    status_code: "pending",
+                    status_name: "대기",
+                    display_order: 1,
+                    count: 0,
+                },
+                in_progress: {
+                    status_id: 2,
+                    status_code: "in_progress",
+                    status_name: "진행",
+                    display_order: 2,
+                    count: 0,
+                },
+                paused: {
+                    status_id: 3,
+                    status_code: "paused",
+                    status_name: "중지",
+                    display_order: 3,
+                    count: 0,
+                },
+                done: {
+                    status_id: 4,
+                    status_code: "done",
+                    status_name: "완료",
+                    display_order: 4,
+                    count: 0,
+                },
+            };
+            
+            // 서버 응답과 합치기
+            sc.forEach((item) => {
+                if (item.status_code in defaultStatusMap) {
+                    // 서버 응답의 status_name을 사용하되, "중단"을 "중지"로 통일
+                    const statusName = item.status_name === "중단" ? "중지" : item.status_name;
+                    defaultStatusMap[item.status_code] = {
+                        ...item,
+                        status_name: statusName,
+                    };
+                }
+            });
+            
+            // 표시 순서대로 정렬: 전체 → 대기 → 진행 → 중지 → 완료
+            const orderedCounts = [
+                defaultStatusMap.pending,
+                defaultStatusMap.in_progress,
+                defaultStatusMap.paused,
+                defaultStatusMap.done,
+            ];
+            
+            setStatusCounts(orderedCounts);
             setProjects(pr);
         } catch (e: any) {
             setErr(e?.message ?? String(e));

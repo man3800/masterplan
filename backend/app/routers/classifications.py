@@ -29,6 +29,7 @@ async def get_classification_tree(
         raise HTTPException(status_code=404, detail=f"Project {project_id} not found")
 
     # Use view if available, otherwise use recursive CTE
+    # 모든 분류를 가져오도록 is_active 조건 제거
     query = text("""
         WITH RECURSIVE tree AS (
             SELECT 
@@ -42,7 +43,7 @@ async def get_classification_tree(
                 c.owner_dept_id, c.created_at, c.updated_at
             FROM classifications c
             INNER JOIN tree t ON c.parent_id = t.id
-            WHERE c.project_id = :project_id AND c.is_active = TRUE
+            WHERE c.project_id = :project_id
         )
         SELECT 
             id, project_id, parent_id, name, depth, path, sort_no, is_active,
@@ -54,27 +55,27 @@ async def get_classification_tree(
     rows = result.mappings().all()
 
     # Build tree structure
-    nodes = {row["id"]: ClassificationOut(**dict(row)) for row in rows}
-    tree = []
+    # 모든 노드를 ClassificationTreeNode로 변환하여 저장
+    node_map: dict[int, ClassificationTreeNode] = {}
+    tree: list[ClassificationTreeNode] = []
 
+    # 1단계: 모든 노드를 ClassificationTreeNode로 생성
+    for row in rows:
+        node_id = row["id"]
+        node_map[node_id] = ClassificationTreeNode(**dict(row), children=[])
+
+    # 2단계: 부모-자식 관계 연결
     for row in rows:
         node_id = row["id"]
         parent_id = row["parent_id"]
-        node = nodes[node_id]
-
+        
         if parent_id is None:
-            # Root node
-            tree_node = ClassificationTreeNode(**dict(row), children=[])
-            tree.append(tree_node)
+            # Root node - tree에 추가
+            tree.append(node_map[node_id])
         else:
-            # Child node - find parent and add to children
-            if parent_id in nodes:
-                parent_node = nodes[parent_id]
-                # Convert to tree node if not already
-                if not isinstance(parent_node, ClassificationTreeNode):
-                    parent_node = ClassificationTreeNode(**parent_node.model_dump(), children=[])
-                    nodes[parent_id] = parent_node
-                parent_node.children.append(ClassificationTreeNode(**dict(row), children=[]))
+            # Child node - 부모의 children에 추가
+            if parent_id in node_map:
+                node_map[parent_id].children.append(node_map[node_id])
 
     return tree
 
@@ -184,6 +185,25 @@ async def create_classification(
     if not project_result.first():
         raise HTTPException(status_code=404, detail=f"Project {classification.project_id} not found")
 
+    # ROOT 생성 전용 로직: parent_id가 NULL이고 name이 'ROOT'인 경우만 허용
+    if classification.parent_id is None:
+        if classification.name.upper() != "ROOT":
+            raise HTTPException(
+                status_code=400,
+                detail="parent_id가 NULL인 분류는 ROOT만 허용됩니다. 모든 분류는 ROOT 아래에 생성되어야 합니다."
+            )
+        # ROOT 중복 체크: 프로젝트당 ROOT는 1개만 허용
+        root_check = text("""
+            SELECT id FROM classifications 
+            WHERE project_id = :project_id AND parent_id IS NULL AND name = 'ROOT'
+        """)
+        root_result = await db.execute(root_check, {"project_id": classification.project_id})
+        if root_result.first():
+            raise HTTPException(
+                status_code=409,
+                detail="이 프로젝트에는 이미 ROOT 노드가 존재합니다. 프로젝트당 ROOT는 1개만 허용됩니다."
+            )
+
     # Verify parent exists if provided
     if classification.parent_id:
         parent_check = text("""
@@ -199,6 +219,26 @@ async def create_classification(
                 status_code=404,
                 detail=f"Parent classification {classification.parent_id} not found or inactive"
             )
+
+    # Check for duplicate name under the same parent (uq_class_sibling constraint)
+    duplicate_check = text("""
+        SELECT id, name FROM classifications 
+        WHERE project_id = :project_id 
+          AND (parent_id = :parent_id OR (parent_id IS NULL AND :parent_id IS NULL))
+          AND name = :name
+    """)
+    duplicate_result = await db.execute(duplicate_check, {
+        "project_id": classification.project_id,
+        "parent_id": classification.parent_id,
+        "name": classification.name,
+    })
+    existing = duplicate_result.first()
+    if existing:
+        parent_info = f"부모 ID {classification.parent_id} 아래" if classification.parent_id else "최상위 레벨"
+        raise HTTPException(
+            status_code=409,
+            detail=f"이미 존재하는 분류입니다: {parent_info}에 '{classification.name}' 이름이 이미 있습니다."
+        )
 
     # Insert classification (path and depth will be auto-calculated by trigger)
     insert_query = text("""
@@ -324,7 +364,17 @@ async def delete_classification(
     if child_count > 0:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot delete classification {classification_id}: it has {child_count} child(ren). Use is_active=false instead."
+            detail=f"자식 분류가 있어서 제거할 수 없습니다. 먼저 자식 분류를 제거하세요. (자식 분류 {child_count}개 존재)"
+        )
+
+    # Check if has connected tasks
+    tasks_check = text("SELECT COUNT(*) FROM tasks WHERE classification_id = :classification_id")
+    tasks_result = await db.execute(tasks_check, {"classification_id": classification_id})
+    task_count = tasks_result.scalar()
+    if task_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"연결된 작업이 있어서 제거할 수 없습니다. 먼저 해당 분류에 연결된 작업을 제거하세요. (연결된 작업 {task_count}개 존재)"
         )
 
     # Delete classification

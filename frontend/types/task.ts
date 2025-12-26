@@ -7,6 +7,7 @@ export type TaskStatus = "open" | "closed" | "in_progress" | string;
 export interface Task {
   id: number;
   project_id: number;
+  project_name: string | null; // JOIN from projects.name
   classification_id: number;
   title: string;
   description: string | null;

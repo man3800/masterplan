@@ -1,5 +1,6 @@
 import "./globals.css";
 import Link from "next/link";
+import { NavigationWrapper } from "./navigation-wrapper";
 
 export const metadata = {
   title: "MasterPlan",
@@ -14,27 +15,9 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="bg-slate-50">
-        <div className="flex min-h-screen">
-          {/* Sidebar */}
-          <aside className="w-56 bg-white border-r flex-shrink-0">
-            <div className="h-14 flex items-center px-4 border-b">
-              <span className="font-bold text-lg">MasterPlan</span>
-            </div>
-
-            <nav className="p-3 space-y-1 text-sm">
-              <NavItem href="/" label="대시보드" />
-              <NavItem href="/tasks" label="작업 목록" />
-              <NavItem href="/master" label="전체 마스터스케줄" />
-              <NavItem href="/projects" label="프로젝트 스케줄" />
-              <NavItem href="/rows/new" label="Row 생성" />
-            </nav>
-          </aside>
-
-          {/* Main */}
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
-        </div>
+        <NavigationWrapper>
+          {children}
+        </NavigationWrapper>
       </body>
     </html>
   );

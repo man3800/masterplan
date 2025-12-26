@@ -21,5 +21,9 @@ psql -h 127.0.0.1 -U postgres -d masterplan -v ON_ERROR_STOP=1 -c "SET client_en
 psql -h 127.0.0.1 -U postgres -d masterplan -v ON_ERROR_STOP=1 -c "SET client_encoding TO 'UTF8';" -f db/migrations/002_grants.sql
 psql -h 127.0.0.1 -U postgres -d masterplan -v ON_ERROR_STOP=1 -c "SET client_encoding TO 'UTF8';" -f db/migrations/003_seed.sql
 
+# 전체 실행 (권장)
+psql -h 127.0.0.1 -U postgres -d masterplan -f db/check_schema.sql
+# 마이그레이션 실행
+psql -h 127.0.0.1 -U postgres -d masterplan -f db/migrations/005_add_missing_columns.sql
 
 

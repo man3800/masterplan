@@ -18,6 +18,15 @@ export async function apiPost<T>(path: string, body: any, method: string = "POST
     });
     if (!res.ok) {
         const errorText = await res.text();
+        // FastAPI 에러 응답 파싱 시도
+        try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.detail) {
+                throw new Error(JSON.stringify({ detail: errorJson.detail }));
+            }
+        } catch {
+            // JSON 파싱 실패 시 원본 텍스트 사용
+        }
         throw new Error(errorText || `HTTP ${res.status}`);
     }
     if (res.status === 204) {

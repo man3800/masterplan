@@ -91,20 +91,28 @@ export default function NewRowPage() {
         loadClassifications();
     }, [projectId]);
 
-    // 분류 트리를 flatten하고 path 생성
+    // 분류 트리를 flatten하고 path 생성 (리프 노드만 포함)
     function flattenTreeWithPath(
         nodes: ClassificationTreeNode[],
         parentPath: string = ""
-    ): Array<{ id: number; name: string; path: string; depth: number }> {
-        const result: Array<{ id: number; name: string; path: string; depth: number }> = [];
+    ): Array<{ id: number; name: string; path: string; depth: number; isLeaf: boolean }> {
+        const result: Array<{ id: number; name: string; path: string; depth: number; isLeaf: boolean }> = [];
         for (const node of nodes) {
             const currentPath = parentPath ? `${parentPath} / ${node.name}` : node.name;
-            result.push({
-                id: node.id,
-                name: node.name,
-                path: currentPath,
-                depth: node.depth,
-            });
+            const isLeaf = !node.children || node.children.length === 0;
+
+            // 리프 노드만 결과에 포함 (작업 = 리프 노드만 선택 가능)
+            if (isLeaf && node.is_active) {
+                result.push({
+                    id: node.id,
+                    name: node.name,
+                    path: currentPath,
+                    depth: node.depth,
+                    isLeaf: true,
+                });
+            }
+
+            // 자식 노드 재귀 처리
             if (node.children && node.children.length > 0) {
                 result.push(...flattenTreeWithPath(node.children, currentPath));
             }
@@ -113,6 +121,19 @@ export default function NewRowPage() {
     }
 
     const flatClassifications = categories.length > 0 ? flattenTreeWithPath(categories) : [];
+    const hasActiveClassifications = categories.some((node) => hasActiveLeaf(node));
+
+    // 트리에 활성 리프 노드가 있는지 확인
+    function hasActiveLeaf(node: ClassificationTreeNode): boolean {
+        const isLeaf = !node.children || node.children.length === 0;
+        if (isLeaf && node.is_active) {
+            return true;
+        }
+        if (node.children && node.children.length > 0) {
+            return node.children.some((child) => hasActiveLeaf(child));
+        }
+        return false;
+    }
 
     // 3) 저장 (Tasks API 사용)
     async function handleSubmit() {
@@ -211,9 +232,25 @@ export default function NewRowPage() {
                 {projectId && projectId > 0 && (
                     <div>
                         <div className="text-sm font-medium mb-2">작업</div>
-                        {flatClassifications.length === 0 ? (
+                        {categories.length === 0 ? (
                             <div className="rounded border p-3 bg-slate-50 text-slate-500 text-sm">
                                 분류 목록 로딩 중...
+                            </div>
+                        ) : !hasActiveClassifications ? (
+                            <div className="rounded border border-blue-200 bg-blue-50 p-4 space-y-3">
+                                <p className="text-sm text-blue-700">
+                                    이 프로젝트에 작업이 없습니다. 먼저 분류를 등록하세요.
+                                </p>
+                                <button
+                                    onClick={() => router.push(`/classifications?project_id=${projectId}`)}
+                                    className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                                >
+                                    분류 등록하러 가기
+                                </button>
+                            </div>
+                        ) : flatClassifications.length === 0 ? (
+                            <div className="rounded border p-3 bg-slate-50 text-slate-500 text-sm">
+                                활성화된 작업이 없습니다. 분류 관리에서 작업(리프 노드)을 추가하세요.
                             </div>
                         ) : (
                             <div className="rounded border p-3 space-y-1 max-h-64 overflow-auto">
@@ -229,6 +266,7 @@ export default function NewRowPage() {
                                             onChange={() => setClassificationId(item.id)}
                                         />
                                         <span className="flex-1">{item.path}</span>
+                                        <span className="text-xs text-blue-500">(작업)</span>
                                     </label>
                                 ))}
                             </div>

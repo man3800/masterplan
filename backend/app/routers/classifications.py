@@ -276,11 +276,19 @@ async def update_classification(
     Update a classification (partial update)
     Note: path and depth are auto-managed by DB triggers
     """
-    # Check if classification exists
-    classification_check = text("SELECT id FROM classifications WHERE id = :classification_id")
+    # Check if classification exists and get parent_id
+    classification_check = text("SELECT id, parent_id FROM classifications WHERE id = :classification_id")
     classification_result = await db.execute(classification_check, {"classification_id": classification_id})
-    if not classification_result.first():
+    classification_row = classification_result.mappings().first()
+    if not classification_row:
         raise HTTPException(status_code=404, detail=f"Classification {classification_id} not found")
+    
+    # ROOT 수정 방지: parent_id가 NULL인 경우 수정 불가
+    if classification_row["parent_id"] is None:
+        raise HTTPException(
+            status_code=400,
+            detail="ROOT classification cannot be modified"
+        )
 
     # Build UPDATE query dynamically
     update_fields = []
@@ -351,11 +359,19 @@ async def delete_classification(
     Note: Will fail if children exist (ON DELETE RESTRICT)
     Recommendation: Use is_active=false instead
     """
-    # Check if classification exists
-    classification_check = text("SELECT id FROM classifications WHERE id = :classification_id")
+    # Check if classification exists and get parent_id
+    classification_check = text("SELECT id, parent_id FROM classifications WHERE id = :classification_id")
     classification_result = await db.execute(classification_check, {"classification_id": classification_id})
-    if not classification_result.first():
+    classification_row = classification_result.mappings().first()
+    if not classification_row:
         raise HTTPException(status_code=404, detail=f"Classification {classification_id} not found")
+    
+    # ROOT 삭제 방지: parent_id가 NULL인 경우 삭제 불가
+    if classification_row["parent_id"] is None:
+        raise HTTPException(
+            status_code=400,
+            detail="ROOT classification cannot be deleted"
+        )
 
     # Check if has children
     children_check = text("SELECT COUNT(*) FROM classifications WHERE parent_id = :classification_id")

@@ -201,8 +201,6 @@ export default function NewRowPage() {
     return (
         <div className="p-6">
             <div className="mx-auto max-w-4xl space-y-6">
-                <h1 className="text-2xl font-bold">Row 생성</h1>
-
                 {error && (
                     <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                         {error}

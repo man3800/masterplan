@@ -181,7 +181,6 @@ export default function TaskDetailPage() {
     <div className="min-h-screen p-6">
       <div className="mx-auto max-w-4xl space-y-6">
         <header className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">작업 상세</h1>
           <div className="flex gap-2">
             <button
               onClick={() => router.back()}

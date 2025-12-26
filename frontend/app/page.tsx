@@ -121,7 +121,6 @@ export default function Page() {
         <div className="min-h-screen p-6">
             <div className="mx-auto max-w-6xl space-y-5">
                 <header className="space-y-1">
-                    <h1 className="text-2xl font-bold">대시보드</h1>
                     <p className="text-sm text-slate-600">
                         프로젝트 현황 요약 · 상태별 필터 · 진행률(단순)
                     </p>

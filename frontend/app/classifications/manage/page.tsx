@@ -28,12 +28,9 @@ function ClassificationsManageContent() {
     const [inlineIsActive, setInlineIsActive] = useState(true);
     const nameInputRef = React.useRef<HTMLInputElement>(null);
     
-    // 모달 상태 (수정용)
-    const [showModal, setShowModal] = useState(false);
-    const [modalClassificationId, setModalClassificationId] = useState<number | null>(null);
-    const [modalName, setModalName] = useState("");
-    const [modalSortNo, setModalSortNo] = useState(0);
-    const [modalIsActive, setModalIsActive] = useState(true);
+    // 수정 모드 상태
+    const [editingClassificationId, setEditingClassificationId] = useState<number | null>(null);
+    const [editingClassificationPath, setEditingClassificationPath] = useState<string>("");
 
     // URL의 project_id와 state 동기화
     useEffect(() => {
@@ -125,12 +122,20 @@ function ClassificationsManageContent() {
     // 트리에서 특정 부모의 자식들을 찾는 함수
     function findChildrenByParentId(nodes: ClassificationTreeNode[], parentId: number): ClassificationTreeNode[] {
         for (const node of nodes) {
+            // 현재 노드가 찾는 부모인 경우
             if (node.id === parentId) {
                 return node.children || [];
             }
+            // 자식 노드들을 재귀적으로 탐색
             if (node.children && node.children.length > 0) {
+                // 먼저 직접 자식 중에 찾는 부모가 있는지 확인
+                const directChild = node.children.find(c => c.id === parentId);
+                if (directChild) {
+                    return directChild.children || [];
+                }
+                // 재귀적으로 찾기
                 const found = findChildrenByParentId(node.children, parentId);
-                if (found.length >= 0) {
+                if (found.length > 0) {
                     return found;
                 }
             }
@@ -157,9 +162,12 @@ function ClassificationsManageContent() {
     }, [tree]);
 
     function cancelInline() {
+        setEditingClassificationId(null);
+        setEditingClassificationPath("");
         setSelectedParentForForm(rootNode?.id || null);
         setInlineName("");
         setInlineSortNo(0);
+        setInlineIsActive(true);
         setError("");
     }
     
@@ -169,21 +177,48 @@ function ClassificationsManageContent() {
             return;
         }
 
-        const actualParentId = selectedParentForForm || rootNode?.id || null;
-        if (!actualParentId) {
-            setError("ROOT 노드가 없습니다.");
+        // 슬래시(/) 입력 방지
+        if (inlineName.includes('/')) {
+            setError("분류 이름에 '/' 문자를 사용할 수 없습니다.");
+            return;
+        }
+
+        // ROOT 수정 방지
+        if (editingClassificationId && rootNode && editingClassificationId === rootNode.id) {
+            setError("ROOT는 변경할 수 없습니다.");
             return;
         }
 
         try {
-            const data: ClassificationCreate = {
-                project_id: projectIdState,
-                parent_id: actualParentId,
-                name: inlineName.trim(),
-                sort_no: inlineSortNo,
-                is_active: inlineIsActive,
-            };
-            await apiPost<ClassificationCreate>("/classifications", data);
+            // 수정 모드인 경우
+            if (editingClassificationId) {
+                const data: ClassificationUpdate = {
+                    name: inlineName.trim(),
+                    sort_no: inlineSortNo,
+                    is_active: inlineIsActive,
+                };
+                await apiPost<ClassificationUpdate>(
+                    `/classifications/${editingClassificationId}`,
+                    data,
+                    "PATCH"
+                );
+            } else {
+                // 추가 모드인 경우
+                const actualParentId = selectedParentForForm || rootNode?.id || null;
+                if (!actualParentId) {
+                    setError("ROOT 노드가 없습니다.");
+                    return;
+                }
+
+                const data: ClassificationCreate = {
+                    project_id: projectIdState,
+                    parent_id: actualParentId,
+                    name: inlineName.trim(),
+                    sort_no: inlineSortNo,
+                    is_active: inlineIsActive,
+                };
+                await apiPost<ClassificationCreate>("/classifications", data);
+            }
             
             // 현재 선택된 부모 분류 ID 저장 (초기화 전에)
             const currentParentId = selectedParentForForm;
@@ -196,11 +231,25 @@ function ClassificationsManageContent() {
             const foundRoot = data2.find((node) => node.parent_id === null && node.name === "ROOT");
             setRootNode(foundRoot || null);
             
-            // 저장 후 폼 초기화 (부모 분류는 유지)
+            // 저장 후 폼 초기화
+            setEditingClassificationId(null);
+            setEditingClassificationPath("");
             setInlineName("");
-            setInlineSortNo(0);
-            // 부모 분류는 저장 전 값으로 복원
-            setSelectedParentForForm(currentParentId);
+            // 부모 분류는 저장 전 값으로 복원 (추가 모드일 때만)
+            if (!editingClassificationId) {
+                setSelectedParentForForm(currentParentId);
+                // 트리 업데이트 후 정렬 순서 다시 계산
+                if (currentParentId) {
+                    updateSortNoForParent(currentParentId);
+                } else {
+                    setInlineSortNo(0);
+                }
+            } else {
+                // 수정 모드였으면 ROOT로 초기화
+                setSelectedParentForForm(rootNode?.id || null);
+                setInlineSortNo(0);
+            }
+            setInlineIsActive(true);
             
             // 분류 뷰 페이지에 업데이트 알림 (BroadcastChannel 사용)
             const channel = new BroadcastChannel("classification-updates");
@@ -241,52 +290,19 @@ function ClassificationsManageContent() {
             return;
         }
         
-        setModalClassificationId(classification.id);
-        setModalName(classification.name);
-        setModalSortNo(classification.sort_no);
-        setModalIsActive(classification.is_active);
-        setShowModal(true);
+        // 상단 폼에 수정할 데이터 채우기
+        setEditingClassificationId(classification.id);
+        setEditingClassificationPath(classification.path || "");
+        setInlineName(classification.name);
+        setInlineSortNo(classification.sort_no);
+        setInlineIsActive(classification.is_active);
+        setSelectedParentForForm(classification.parent_id || rootNode?.id || null);
         setError("");
-    }
-
-    async function handleSaveModal() {
-        if (!projectIdState || projectIdState <= 0 || !modalName.trim() || !modalClassificationId) {
-            setError("이름을 입력하세요.");
-            return;
-        }
-
-        try {
-            const data: ClassificationUpdate = {
-                name: modalName.trim(),
-                sort_no: modalSortNo,
-                is_active: modalIsActive,
-            };
-            await apiPost<ClassificationUpdate>(
-                `/classifications/${modalClassificationId}`,
-                data,
-                "PATCH"
-            );
-
-            setShowModal(false);
-            // 트리 다시 로드
-            const data2 = await apiGet<ClassificationTreeNode[]>(
-                `/classifications/tree?project_id=${projectIdState}`
-            );
-            setTree(data2);
-            const foundRoot = data2.find((node) => node.parent_id === null && node.name === "ROOT");
-            setRootNode(foundRoot || null);
-        } catch (e) {
-            let errorMessage = e instanceof Error ? e.message : String(e);
-            try {
-                const errorJson = JSON.parse(errorMessage);
-                if (errorJson.detail) {
-                    errorMessage = errorJson.detail;
-                }
-            } catch {
-                // JSON이 아니면 원본 메시지 사용
-            }
-            setError(errorMessage);
-        }
+        
+        // 분류 이름 입력 필드로 포커스 이동
+        setTimeout(() => {
+            nameInputRef.current?.focus();
+        }, 100);
     }
 
     async function handleDelete(classificationId: number, node: ClassificationTreeNode) {
@@ -354,7 +370,6 @@ function ClassificationsManageContent() {
                 {/* 헤더 */}
                 <div className="flex items-start justify-between gap-3">
                     <div>
-                        <h1 className="text-2xl font-bold">분류 관리</h1>
                         <p className="mt-1 text-sm text-slate-600">
                             프로젝트별 분류 등록 및 관리
                         </p>
@@ -382,27 +397,36 @@ function ClassificationsManageContent() {
                     />
                 </div>
 
-                {/* 분류 추가 폼 (항상 표시) */}
+                {/* 분류 추가/수정 폼 (항상 표시) */}
                 {projectIdState && projectIdState > 0 && rootNode && (
                     <div className="rounded-xl border bg-white p-2">
-                        <div className="text-sm font-semibold mb-2">분류 추가</div>
-                        <div className="space-y-2">
-                            <div>
-                                <label className="block text-xs font-medium mb-1">
-                                    부모 분류
-                                </label>
-                                <select
-                                    className="w-full rounded border px-2 py-1 text-sm"
-                                    value={selectedParentForForm || rootNode.id}
-                                    onChange={(e) => {
-                                        const parentId = parseInt(e.target.value);
-                                        setSelectedParentForForm(parentId);
-                                        updateSortNoForParent(parentId);
-                                    }}
-                                >
-                                    {renderParentOptions(tree, rootNode.id)}
-                                </select>
+                        <div className="text-sm font-semibold mb-2">
+                            {editingClassificationId ? "분류 수정" : "분류 추가"}
+                        </div>
+                        {editingClassificationId && editingClassificationPath && (
+                            <div className="mb-2 text-xs text-slate-500">
+                                경로: {editingClassificationPath}
                             </div>
+                        )}
+                        <div className="space-y-2">
+                            {!editingClassificationId && (
+                                <div>
+                                    <label className="block text-xs font-medium mb-1">
+                                        부모 분류
+                                    </label>
+                                    <select
+                                        className="w-full rounded border px-2 py-1 text-sm"
+                                        value={selectedParentForForm || rootNode.id}
+                                        onChange={(e) => {
+                                            const parentId = parseInt(e.target.value);
+                                            setSelectedParentForForm(parentId);
+                                            updateSortNoForParent(parentId);
+                                        }}
+                                    >
+                                        {renderParentOptions(tree, rootNode.id)}
+                                    </select>
+                                </div>
+                            )}
                             <div>
                                 <label className="block text-xs font-medium mb-1">
                                     분류 이름 <span className="text-red-500">*</span>
@@ -410,9 +434,18 @@ function ClassificationsManageContent() {
                                 <input
                                     ref={nameInputRef}
                                     type="text"
-                                    className="w-full rounded border px-2 py-1 text-sm"
+                                    className={`w-full rounded border px-2 py-1 text-sm ${editingClassificationId && rootNode && editingClassificationId === rootNode.id ? 'bg-slate-100 cursor-not-allowed' : ''}`}
                                     value={inlineName}
-                                    onChange={(e) => setInlineName(e.target.value)}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        // 슬래시(/) 입력 방지
+                                        if (value.includes('/')) {
+                                            setError("분류 이름에 '/' 문자를 사용할 수 없습니다.");
+                                            return;
+                                        }
+                                        setInlineName(value);
+                                        setError("");
+                                    }}
                                     onKeyDown={(e) => {
                                         if (e.key === "Enter" && !e.shiftKey) {
                                             e.preventDefault();
@@ -420,7 +453,11 @@ function ClassificationsManageContent() {
                                         }
                                     }}
                                     placeholder="분류 이름 입력"
+                                    disabled={editingClassificationId !== null && rootNode !== null && editingClassificationId === rootNode.id}
                                 />
+                                {editingClassificationId !== null && rootNode !== null && editingClassificationId === rootNode.id && (
+                                    <p className="mt-1 text-xs text-red-600">ROOT는 변경할 수 없습니다.</p>
+                                )}
                             </div>
                             <div className="flex items-center gap-4">
                                 <div className="flex-1">
@@ -443,15 +480,26 @@ function ClassificationsManageContent() {
                                 </div>
                             </div>
                             <div className="flex justify-end gap-2">
-                                <button
-                                    onClick={cancelInline}
-                                    className="rounded border px-3 py-1 text-xs hover:bg-slate-100"
-                                >
-                                    초기화
-                                </button>
+                                {editingClassificationId && (
+                                    <button
+                                        onClick={cancelInline}
+                                        className="rounded border px-3 py-1 text-xs hover:bg-slate-100"
+                                    >
+                                        취소
+                                    </button>
+                                )}
+                                {!editingClassificationId && (
+                                    <button
+                                        onClick={cancelInline}
+                                        className="rounded border px-3 py-1 text-xs hover:bg-slate-100"
+                                    >
+                                        초기화
+                                    </button>
+                                )}
                                 <button
                                     onClick={saveInline}
-                                    className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700"
+                                    className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700 disabled:bg-slate-400 disabled:cursor-not-allowed"
+                                    disabled={editingClassificationId !== null && rootNode !== null && editingClassificationId === rootNode.id}
                                 >
                                     저장
                                 </button>
@@ -479,48 +527,58 @@ function ClassificationsManageContent() {
                                         return result;
                                     };
                                     return flatten(node);
-                                }).map(({ node, depth }) => (
-                                    <div key={node.id} className="flex items-center justify-between py-1 border-b last:border-b-0" style={{ paddingLeft: `${depth * 16}px` }}>
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium">{node.name}</span>
-                                                <span className="text-xs text-slate-500">({node.path})</span>
-                                                {!node.is_active && (
-                                                    <span className="text-xs text-red-500">(비활성)</span>
+                                }).map(({ node, depth }) => {
+                                    const isRoot = node.parent_id === null;
+                                    return (
+                                        <div key={node.id} className="flex items-center justify-between py-1 border-b last:border-b-0" style={{ paddingLeft: `${depth * 16}px` }}>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-medium">{node.name}</span>
+                                                    {isRoot && (
+                                                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">최상위(ROOT)</span>
+                                                    )}
+                                                    <span className="text-xs text-slate-500">({node.path})</span>
+                                                    {!node.is_active && (
+                                                        <span className="text-xs text-red-500">(비활성)</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                {!isRoot && (
+                                                    <button
+                                                        onClick={() => openEditModal(node.id)}
+                                                        className="rounded border px-2 py-1 text-xs hover:bg-slate-100"
+                                                    >
+                                                        수정
+                                                    </button>
+                                                )}
+                                                <button
+                                                    onClick={() => {
+                                                        setSelectedParentForForm(node.id);
+                                                        updateSortNoForParent(node.id);
+                                                        // 분류 이름 입력 필드로 포커스 이동
+                                                        setTimeout(() => {
+                                                            nameInputRef.current?.focus();
+                                                        }, 100);
+                                                    }}
+                                                    className="rounded border px-2 py-1 text-xs hover:bg-slate-100"
+                                                >
+                                                    추가
+                                                </button>
+                                                {!isRoot && (
+                                                    <button
+                                                        onClick={() => handleDelete(node.id, node)}
+                                                        className="rounded border px-2 py-1 text-xs hover:bg-red-50 text-red-600 hover:text-red-700"
+                                                        disabled={node.children && node.children.length > 0}
+                                                        title={node.children && node.children.length > 0 ? "자식 분류가 있어서 제거할 수 없습니다" : "분류 제거"}
+                                                    >
+                                                        제거
+                                                    </button>
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex gap-1">
-                                            <button
-                                                onClick={() => openEditModal(node.id)}
-                                                className="rounded border px-2 py-1 text-xs hover:bg-slate-100"
-                                            >
-                                                수정
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setSelectedParentForForm(node.id);
-                                                    updateSortNoForParent(node.id);
-                                                    // 분류 이름 입력 필드로 포커스 이동
-                                                    setTimeout(() => {
-                                                        nameInputRef.current?.focus();
-                                                    }, 100);
-                                                }}
-                                                className="rounded border px-2 py-1 text-xs hover:bg-slate-100"
-                                            >
-                                                추가
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(node.id, node)}
-                                                className="rounded border px-2 py-1 text-xs hover:bg-red-50 text-red-600 hover:text-red-700"
-                                                disabled={node.children && node.children.length > 0}
-                                                title={node.children && node.children.length > 0 ? "자식 분류가 있어서 제거할 수 없습니다" : "분류 제거"}
-                                            >
-                                                제거
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
@@ -533,63 +591,6 @@ function ClassificationsManageContent() {
                 )}
             </div>
 
-            {/* 모달 */}
-            {showModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                    <div className="w-full max-w-md rounded-lg bg-white p-6 space-y-4">
-                        <h2 className="text-lg font-bold">분류 수정</h2>
-
-                        <div>
-                            <label className="block text-sm font-medium mb-1">
-                                이름 <span className="text-red-500">*</span>
-                            </label>
-                            <input
-                                type="text"
-                                className="w-full rounded border px-3 py-2"
-                                value={modalName}
-                                onChange={(e) => setModalName(e.target.value)}
-                                placeholder="분류 이름"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium mb-1">정렬 순서</label>
-                            <input
-                                type="number"
-                                className="w-full rounded border px-3 py-2"
-                                value={modalSortNo}
-                                onChange={(e) => setModalSortNo(parseInt(e.target.value) || 0)}
-                            />
-                        </div>
-
-                        <div>
-                            <label className="flex items-center gap-2">
-                                <input
-                                    type="checkbox"
-                                    checked={modalIsActive}
-                                    onChange={(e) => setModalIsActive(e.target.checked)}
-                                />
-                                활성 상태
-                            </label>
-                        </div>
-
-                        <div className="flex justify-end gap-2 pt-4 border-t">
-                            <button
-                                onClick={() => setShowModal(false)}
-                                className="rounded-md border px-4 py-2 text-sm hover:bg-slate-50"
-                            >
-                                취소
-                            </button>
-                            <button
-                                onClick={handleSaveModal}
-                                className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-                            >
-                                저장
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

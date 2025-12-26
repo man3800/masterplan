@@ -113,7 +113,6 @@ export default function NewTaskPage() {
     <div className="min-h-screen p-6">
       <div className="mx-auto max-w-4xl space-y-6">
         <header className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">새 작업 생성</h1>
           <button
             onClick={() => router.back()}
             className="rounded-md border px-4 py-2 text-sm hover:bg-slate-50"

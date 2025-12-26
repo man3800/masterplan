@@ -133,7 +133,6 @@ export default function TasksPage() {
       <div className="mx-auto max-w-7xl space-y-5">
         <header className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">작업 목록</h1>
             <p className="text-sm text-slate-600">작업 관리 및 조회</p>
           </div>
           <button

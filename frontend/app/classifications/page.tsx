@@ -113,7 +113,6 @@ function ClassificationsContent() {
                 {/* 헤더 */}
                 <div className="flex items-start justify-between gap-3">
                     <div>
-                        <h1 className="text-2xl font-bold">분류 뷰</h1>
                         <p className="mt-1 text-sm text-slate-600">
                             프로젝트별 분류 트리 조회
                         </p>

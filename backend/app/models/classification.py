@@ -4,7 +4,7 @@ Based on actual schema: classifications table
 """
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ClassificationCreate(BaseModel):
@@ -18,6 +18,14 @@ class ClassificationCreate(BaseModel):
 
     # Note: path and depth are auto-managed by DB triggers, do not include in Create
 
+    @field_validator('name')
+    @classmethod
+    def validate_name_no_slash(cls, v: str) -> str:
+        """Validate that name does not contain '/' character"""
+        if '/' in v:
+            raise ValueError("Classification name cannot contain '/'")
+        return v
+
 
 class ClassificationUpdate(BaseModel):
     """Classification update input model (all fields optional)"""
@@ -28,6 +36,14 @@ class ClassificationUpdate(BaseModel):
     owner_dept_id: Optional[int] = None
 
     # Note: path and depth are auto-managed by DB triggers, do not include in Update
+
+    @field_validator('name')
+    @classmethod
+    def validate_name_no_slash(cls, v: Optional[str]) -> Optional[str]:
+        """Validate that name does not contain '/' character"""
+        if v is not None and '/' in v:
+            raise ValueError("Classification name cannot contain '/'")
+        return v
 
 
 class ClassificationOut(BaseModel):
